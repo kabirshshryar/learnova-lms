@@ -6,6 +6,16 @@ import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import GigsPage from "./pages/GigsPage";
 
+const NavLink = ({ to, children, icon: Icon }) => (
+  <Link 
+    to={to} 
+    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-slate-300 hover:text-white hover:bg-white/5 transition-all"
+  >
+    {Icon && <Icon className="w-4 h-4" />}
+    {children}
+  </Link>
+);
+
 function App() {
   const token = localStorage.getItem("token");
   const user = (() => {
@@ -15,16 +25,6 @@ function App() {
       return null;
     }
   })();
-
-  const NavLink = ({ to, children, icon: Icon }) => (
-    <Link 
-      to={to} 
-      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-slate-300 hover:text-white hover:bg-white/5 transition-all"
-    >
-      {Icon && <Icon className="w-4 h-4" />}
-      {children}
-    </Link>
-  );
 
   return (
     <div className="min-h-screen bg-dark-bg text-slate-200 font-inter selection:bg-brand/30">

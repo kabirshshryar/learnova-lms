@@ -4,6 +4,21 @@ import { motion } from "framer-motion";
 import { LogIn, UserPlus, Mail, Lock, User as UserIcon, Tag, CheckCircle2 } from "lucide-react";
 import api from "../api/axios";
 
+const InputField = ({ label, icon: Icon, ...props }) => (
+  <div className="space-y-2">
+    <label className="text-sm font-semibold text-slate-300 ml-1">{label}</label>
+    <div className="relative group">
+      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-brand transition-colors">
+        <Icon className="w-5 h-5" />
+      </div>
+      <input 
+        {...props}
+        className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-brand/50 focus:border-brand transition-all"
+      />
+    </div>
+  </div>
+);
+
 function LoginPage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -67,21 +82,6 @@ function LoginPage() {
       setIsSubmitting(false);
     }
   };
-
-  const InputField = ({ label, icon: Icon, ...props }) => (
-    <div className="space-y-2">
-      <label className="text-sm font-semibold text-slate-300 ml-1">{label}</label>
-      <div className="relative group">
-        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-brand transition-colors">
-          <Icon className="w-5 h-5" />
-        </div>
-        <input 
-          {...props}
-          className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-brand/50 focus:border-brand transition-all"
-        />
-      </div>
-    </div>
-  );
 
   return (
     <section className="flex justify-center items-center py-10">
