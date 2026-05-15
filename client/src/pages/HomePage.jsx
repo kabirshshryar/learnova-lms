@@ -8,236 +8,242 @@ import {
   Star, 
   ShieldCheck, 
   Video, 
-  Wallet 
+  Wallet,
+  CheckCircle2,
+  Trophy,
+  Globe
 } from "lucide-react";
 
 const FeatureCard = ({ icon: Icon, title, desc, delay }) => (
   <motion.article 
-    initial={{ opacity: 0, y: 20 }}
+    initial={{ opacity: 0, y: 15 }}
     whileInView={{ opacity: 1, y: 0 }}
     viewport={{ once: true }}
-    transition={{ duration: 0.5, delay }}
-    whileHover={{ y: -5, transition: { duration: 0.2 } }}
-    className="bg-white/5 border border-white/10 p-6 rounded-2xl backdrop-blur-sm hover:bg-white/10 transition-colors group"
+    transition={{ duration: 0.4, delay }}
+    className="lms-card p-8 hover:border-brand/40 transition-all group"
   >
-    <div className="w-12 h-12 bg-brand/20 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+    <div className="w-12 h-12 bg-brand/10 rounded-xl flex items-center justify-center mb-6 group-hover:bg-brand/20 transition-colors">
       <Icon className="text-brand-light w-6 h-6" />
     </div>
-    <h3 className="text-xl font-bold mb-2 font-outfit text-white">{title}</h3>
+    <h3 className="text-xl font-bold mb-3 text-white">{title}</h3>
     <p className="text-slate-400 text-sm leading-relaxed">{desc}</p>
   </motion.article>
 );
 
-const TokenStep = ({ num, title, desc, delay }) => (
-  <motion.li 
-    initial={{ opacity: 0, x: -20 }}
-    whileInView={{ opacity: 1, x: 0 }}
+const Step = ({ num, title, desc, delay }) => (
+  <motion.div 
+    initial={{ opacity: 0, y: 10 }}
+    whileInView={{ opacity: 1, y: 0 }}
     viewport={{ once: true }}
-    transition={{ duration: 0.5, delay }}
-    className="flex gap-4 items-start"
+    transition={{ duration: 0.4, delay }}
+    className="relative pl-12"
   >
-    <span className="flex-shrink-0 w-8 h-8 rounded-full bg-brand/20 text-brand-light flex items-center justify-center font-bold font-outfit border border-brand/30">
+    <div className="absolute left-0 top-0 w-8 h-8 rounded-full bg-brand/10 border border-brand/20 flex items-center justify-center text-brand-light text-xs font-bold font-outfit">
       {num}
-    </span>
-    <div>
-      <h4 className="font-bold text-white mb-1">{title}</h4>
-      <p className="text-slate-400 text-sm">{desc}</p>
     </div>
-  </motion.li>
+    <h4 className="text-white font-bold mb-2">{title}</h4>
+    <p className="text-slate-400 text-sm leading-relaxed">{desc}</p>
+  </motion.div>
 );
 
 function HomePage() {
   return (
-    <div className="space-y-24 pb-20 overflow-hidden">
-      {/* Hero Section */}
-      <section className="relative pt-12 lg:pt-20">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-brand/10 blur-[120px] rounded-full pointer-events-none -z-10" />
+    <div className="space-y-32">
+      {/* Hero Section - Cleaner Typography & Visual Hierarchy */}
+      <section className="relative py-12 lg:py-20 flex flex-col items-center text-center">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-[500px] bg-brand/5 blur-[120px] rounded-full -z-10" />
         
-        <div className="text-center space-y-8 max-w-4xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5 }}
-          >
-            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand/10 border border-brand/20 text-brand-light text-xs font-bold uppercase tracking-wider mb-6">
-              <Zap className="w-3 h-3 fill-current" /> Education Marketplace
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="max-w-4xl space-y-8"
+        >
+          <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-brand-light text-xs font-bold uppercase tracking-widest shadow-sm">
+            <Zap className="w-3.5 h-3.5 fill-current" />
+            Empowering the Next Generation of Experts
+          </div>
+          
+          <h1 className="text-5xl lg:text-7xl font-extrabold tracking-tight text-white leading-[1.1] font-outfit">
+            Master Specialized Skills with <br className="hidden lg:block" />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-light to-brand-dark">
+              Expert-Led Micro-Courses
             </span>
-            <h1 className="text-5xl lg:text-7xl font-extrabold font-outfit tracking-tight text-white leading-tight">
-              Master any skill with <br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-light via-white to-accent">
-                Learnova Experts
-              </span>
-            </h1>
-          </motion.div>
+          </h1>
 
-          <motion.p 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="text-lg text-slate-400 max-w-2xl mx-auto leading-relaxed"
-          >
-            A lightweight MOOC marketplace where you can learn from real experts 
-            or teach and earn tokens. Real-time bookings, chat, and live classes 
-            all in one seamless experience.
-          </motion.p>
+          <p className="text-lg text-slate-400 max-w-2xl mx-auto leading-relaxed">
+            The modern marketplace for specialized 1-on-1 tutoring and live sessions. 
+            Join a community where learning is verified, secure, and expert-driven.
+          </p>
 
-          <motion.div 
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.4 }}
-            className="flex flex-wrap items-center justify-center gap-4"
-          >
-            <Link 
-              to="/register" 
-              className="px-8 py-4 bg-brand hover:bg-brand-dark text-white rounded-xl font-bold flex items-center gap-2 transition-all transform hover:scale-105 active:scale-95 shadow-lg shadow-brand/20"
-            >
-              Start Learning Now <ArrowRight className="w-5 h-5" />
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+            <Link to="/register" className="btn btn-primary h-14 px-10 text-base shadow-xl shadow-brand/20 active:scale-95">
+              Start Your Journey <ArrowRight className="w-5 h-5 ml-1" />
             </Link>
-            <Link 
-              to="/gigs" 
-              className="px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl font-bold transition-all"
-            >
-              Explore Tutors
+            <Link to="/gigs" className="btn btn-secondary h-14 px-10 text-base active:scale-95">
+              Browse All Tutors
             </Link>
-          </motion.div>
+          </div>
 
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 1, delay: 0.6 }}
-            className="pt-12 flex flex-wrap justify-center gap-8 text-slate-500 font-medium text-sm"
-          >
-            <span className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-brand-light" /> Escrow Protected</span>
-            <span className="flex items-center gap-2"><Star className="w-4 h-4 text-yellow-500" /> Top Rated Tutors</span>
-            <span className="flex items-center gap-2"><Video className="w-4 h-4 text-accent" /> Live Live Classes</span>
-          </motion.div>
-        </div>
+          <div className="pt-12 grid grid-cols-2 md:grid-cols-4 gap-8 max-w-3xl mx-auto border-t border-white/5">
+            {[
+              { icon: Globe, text: "Global Access" },
+              { icon: ShieldCheck, text: "Escrow Secure" },
+              { icon: Video, text: "Live Learning" },
+              { icon: Trophy, text: "Certified Tutors" }
+            ].map((item, i) => (
+              <div key={i} className="flex flex-col items-center gap-2 opacity-50 hover:opacity-100 transition-opacity">
+                <item.icon className="w-5 h-5 text-slate-300" />
+                <span className="text-[10px] uppercase font-bold tracking-widest text-slate-400">{item.text}</span>
+              </div>
+            ))}
+          </div>
+        </motion.div>
       </section>
 
-      {/* Feature Grid */}
-      <section className="container mx-auto px-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Trust Section - Value Propositions */}
+      <section className="container mx-auto max-w-6xl">
+        <div className="text-center mb-16 space-y-4">
+          <h2 className="text-3xl lg:text-4xl font-bold font-outfit text-white">Why Learn on Learnova?</h2>
+          <p className="text-slate-400 max-w-xl mx-auto">Structured for professional results, built with marketplace transparency.</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <FeatureCard 
             icon={BookOpen}
-            title="Structured Learning"
-            desc="Sessions mapped to subjects and difficulty. Browse like a marketplace, progress like an LMS."
+            title="Structured Sessions"
+            desc="Every gig is a specialized module designed for high-impact learning. No fluff, just skills."
             delay={0.1}
           />
           <FeatureCard 
             icon={Users}
-            title="Expert Tutoring"
-            desc="Connect directly with verified experts for personalized 1-on-1 sessions and live classes."
+            title="Direct Expert Access"
+            desc="Skip the pre-recorded videos. Book live sessions with experts who provide real-time feedback."
             delay={0.2}
           />
           <FeatureCard 
             icon={Wallet}
-            title="Token Economy"
-            desc="Secure token-based payments with escrow protection. Pay as you learn, earn as you teach."
+            title="Transparent Economy"
+            desc="Pay with tokens, secure with escrow. Tutors only get paid when you confirm the session is complete."
             delay={0.3}
           />
         </div>
       </section>
 
-      {/* Token Flow Section */}
-      <section className="container mx-auto px-4">
+      {/* How it Works - The Journey */}
+      <section className="container mx-auto max-w-6xl py-12">
+        <div className="lms-card p-12 lg:p-20 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-brand/10 blur-[100px] -mr-40 -mt-40 rounded-full" />
+          
+          <div className="grid lg:grid-cols-2 gap-20 items-center">
+            <div className="space-y-10">
+              <div className="space-y-4">
+                <h2 className="text-4xl font-bold font-outfit text-white leading-tight">
+                  A Simple, Secure <br />
+                  <span className="text-brand-light">Learning Cycle</span>
+                </h2>
+                <p className="text-slate-400 text-base leading-relaxed">
+                  We've streamlined the process of finding and booking top-tier talent. 
+                  Our tokenized escrow system ensures both parties are protected.
+                </p>
+              </div>
+
+              <div className="space-y-10">
+                <Step 
+                  num="1"
+                  title="Find Your Expert"
+                  desc="Search our catalog of verified tutors specialized in tech, design, business, and more."
+                  delay={0.1}
+                />
+                <Step 
+                  num="2"
+                  title="Book with Tokens"
+                  desc="Select a time slot and commit tokens. They stay in escrow until you're satisfied."
+                  delay={0.2}
+                />
+                <Step 
+                  num="3"
+                  title="Complete & Learn"
+                  desc="Attend your live session via Jitsi. Once done, confirm to release the payment."
+                  delay={0.3}
+                />
+              </div>
+
+              <div className="pt-6">
+                <Link to="/register" className="btn btn-primary h-12 px-8">Join the Community</Link>
+              </div>
+            </div>
+
+            {/* Visual Representation of Platform */}
+            <div className="space-y-6">
+              <div className="bg-dark-bg/60 border border-white/5 rounded-2xl p-8 backdrop-blur-sm">
+                <div className="flex items-center justify-between mb-8 pb-4 border-b border-white/5">
+                  <h4 className="text-sm font-bold text-white uppercase tracking-widest">Active Marketplace</h4>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
+                    <span className="text-[10px] font-bold text-success uppercase">Live Feed</span>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  {[
+                    { u: "John D.", a: "Booked React Session", t: "Just now", amt: "-45", s: "Escrow" },
+                    { u: "Marta K.", a: "Earned from Design Gig", t: "5m ago", amt: "+120", s: "Completed" },
+                    { u: "Alex P.", a: "Top-up: 500 Tokens", t: "12m ago", amt: "+500", s: "Success" }
+                  ].map((item, i) => (
+                    <div key={i} className="flex justify-between items-center p-4 bg-white/5 rounded-xl border border-white/5">
+                      <div className="flex gap-4 items-center">
+                        <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-500">
+                          {item.u[0]}
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-white">{item.u}</p>
+                          <p className="text-[10px] text-slate-500 font-medium">{item.a}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-sm font-bold ${item.amt.startsWith('+') ? 'text-success' : 'text-brand-light'}`}>{item.amt}</p>
+                        <p className="text-[9px] text-slate-600 font-bold uppercase tracking-wider">{item.s}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <p className="text-center text-xs text-slate-600 italic">Join 1,200+ users already learning on Learnova</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA - Closing the sale */}
+      <section className="container mx-auto max-w-4xl text-center py-20 px-6">
         <motion.div 
           initial={{ opacity: 0, scale: 0.95 }}
           whileInView={{ opacity: 1, scale: 1 }}
           viewport={{ once: true }}
-          className="bg-gradient-to-br from-brand/20 to-accent/5 border border-white/10 rounded-3xl p-8 lg:p-12 relative overflow-hidden"
+          className="space-y-10"
         >
-          <div className="absolute top-0 right-0 w-64 h-64 bg-brand/20 blur-[80px] -mr-32 -mt-32 rounded-full" />
-          
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div className="space-y-6">
-              <h2 className="text-3xl lg:text-4xl font-bold font-outfit text-white">
-                The Learnova <br />
-                <span className="text-brand-light">Token Economy</span>
-              </h2>
-              <p className="text-slate-400 leading-relaxed">
-                We've simplified marketplace payments using a secure token system. 
-                Whether you're topping up to learn or withdrawing your earnings as a tutor, 
-                everything is handled with transparency and speed.
-              </p>
-              <ul className="space-y-6">
-                <TokenStep 
-                  num="01"
-                  title="Purchase Tokens"
-                  desc="Prepaid credits toward sessions. Easy top-ups via standard payment gateways."
-                  delay={0.1}
-                />
-                <TokenStep 
-                  num="02"
-                  title="Book a Tutor"
-                  desc="Tokens go to secure escrow until the session is confirmed as complete."
-                  delay={0.2}
-                />
-                <TokenStep 
-                  num="03"
-                  title="Cash Out"
-                  desc="Tutors can withdraw their balance directly to their bank or mobile wallet."
-                  delay={0.3}
-                />
-              </ul>
-            </div>
-            
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-md space-y-4">
-              <div className="flex justify-between items-center pb-4 border-bottom border-white/5">
-                <span className="text-slate-400 font-bold">Transaction Ledger</span>
-                <span className="px-2 py-1 bg-success/20 text-success text-[10px] rounded uppercase font-bold tracking-widest">Realtime</span>
-              </div>
-              <div className="space-y-3">
-                {[
-                  { user: "Alice M.", action: "Purchased 50 Tokens", time: "2m ago", amount: "+50" },
-                  { user: "Dev K.", action: "Withdrawal Approved", time: "15m ago", amount: "-120" },
-                  { user: "Sarah J.", action: "Booked Python Basics", time: "1h ago", amount: "-15" },
-                ].map((item, i) => (
-                  <motion.div 
-                    key={i}
-                    initial={{ opacity: 0, y: 10 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.1 }}
-                    className="flex justify-between items-center p-3 bg-white/5 rounded-xl border border-white/5"
-                  >
-                    <div className="flex gap-3 items-center">
-                      <div className="w-8 h-8 rounded-full bg-slate-700 border border-slate-600" />
-                      <div>
-                        <p className="text-xs font-bold text-white">{item.user}</p>
-                        <p className="text-[10px] text-slate-500">{item.action}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className={`text-xs font-bold ${item.amount.startsWith('+') ? 'text-success' : 'text-slate-300'}`}>{item.amount}</p>
-                      <p className="text-[10px] text-slate-500">{item.time}</p>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
+          <div className="flex justify-center">
+            <div className="w-20 h-20 bg-brand/10 rounded-3xl flex items-center justify-center border border-brand/20">
+              <Trophy className="w-10 h-10 text-brand-light" />
             </div>
           </div>
-        </motion.div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="container mx-auto px-4 text-center">
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="max-w-2xl mx-auto space-y-8"
-        >
-          <h2 className="text-4xl font-bold font-outfit text-white">Ready to start your journey?</h2>
-          <p className="text-slate-400">
-            Join thousands of learners and tutors on the most innovative 
-            education marketplace in the web3 space.
-          </p>
-          <div className="flex justify-center gap-4">
-            <Link 
-              to="/register" 
-              className="px-10 py-4 bg-brand text-white rounded-xl font-bold shadow-xl shadow-brand/20 hover:scale-105 active:scale-95 transition-all"
-            >
-              Get Started for Free
-            </Link>
+          <div className="space-y-4">
+            <h2 className="text-4xl font-bold font-outfit text-white">Elevate Your Career with Experts</h2>
+            <p className="text-slate-400 text-lg max-w-2xl mx-auto leading-relaxed">
+              Whether you're looking to acquire new skills or share your expertise, 
+              Learnova provides the infrastructure for professional growth.
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Link to="/register" className="btn btn-primary h-14 px-12 text-base w-full sm:w-auto">Start as Learner</Link>
+            <Link to="/register" className="btn btn-secondary h-14 px-12 text-base w-full sm:w-auto">Become a Tutor</Link>
+          </div>
+          <div className="flex items-center justify-center gap-8 pt-8">
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <CheckCircle2 className="w-4 h-4 text-success" /> No subscription required
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <CheckCircle2 className="w-4 h-4 text-success" /> Escrow protected
+            </div>
           </div>
         </motion.div>
       </section>
