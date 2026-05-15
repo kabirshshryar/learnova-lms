@@ -20,11 +20,15 @@ const createWithdrawalRequest = async (req, res) => {
 
     await session.withTransaction(async () => {
       const teacher = await User.findById(req.user.id)
-        .select('roles withdrawableBalance')
+        .select('roles withdrawableBalance status')
         .session(session);
 
       if (!teacher) {
         throw new Error('USER_NOT_FOUND');
+      }
+
+      if (teacher.status !== 'active') {
+        throw new Error('ACCOUNT_NOT_APPROVED');
       }
 
       const roles = Array.isArray(teacher.roles) ? teacher.roles : [];
@@ -93,6 +97,11 @@ const createWithdrawalRequest = async (req, res) => {
     if (error.message === 'TEACHER_ROLE_REQUIRED') {
       return res.status(403).json({
         message: 'Access denied. Teacher role is required.',
+      });
+    }
+    if (error.message === 'ACCOUNT_NOT_APPROVED') {
+      return res.status(403).json({
+        message: 'Your account must be approved by an admin before you can request withdrawals.',
       });
     }
     if (error.message === 'INSUFFICIENT_WITHDRAWABLE_BALANCE') {

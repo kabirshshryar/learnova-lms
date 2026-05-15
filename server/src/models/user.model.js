@@ -28,6 +28,11 @@ const userSchema = new mongoose.Schema(
       enum: ['student', 'instructor', 'admin'],
       default: ['student'],
     },
+    status: {
+      type: String,
+      enum: ['pending', 'active'],
+      default: 'pending',
+    },
     interests: {
       type: [String],
       default: [],

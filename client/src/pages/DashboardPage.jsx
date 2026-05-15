@@ -25,7 +25,8 @@ import {
   MessageSquare,
   MoreVertical,
   ExternalLink,
-  Search
+  Search,
+  Sparkles
 } from "lucide-react";
 import api from "../api/axios";
 import { createSocketClient } from "../realtime/socket";
@@ -87,6 +88,9 @@ function DashboardPage() {
   const [isLoadingTx, setIsLoadingTx] = useState(true);
   const [isLoadingWithdrawals, setIsLoadingWithdrawals] = useState(false);
   const [isAddingTokens, setIsAddingTokens] = useState(false);
+  const [adminSubTab, setAdminSubTab] = useState("accounts");
+  const [pendingUsers, setPendingUsers] = useState([]);
+  const [pendingBookings, setPendingBookings] = useState([]);
   const [topUpAmount, setTopUpAmount] = useState("100");
   const [interestsDraft, setInterestsDraft] = useState("");
   const [isSavingInterests, setIsSavingInterests] = useState(false);
@@ -157,23 +161,59 @@ function DashboardPage() {
   }, [isTeacher]);
 
   const loadPendingWithdrawals = useCallback(async () => {
-    if (!isAdmin) {
-      setPendingWithdrawals([]);
-      return;
-    }
+    if (!isAdmin) return;
     try {
       const { data } = await api.get("/withdrawals/pending");
       setPendingWithdrawals(Array.isArray(data.requests) ? data.requests : []);
-    } catch (requestError) {
-      setPendingWithdrawals([]);
-    }
+    } catch (e) {}
   }, [isAdmin]);
+
+  const loadPendingUsers = useCallback(async () => {
+    if (!isAdmin) return;
+    try {
+      const { data } = await api.get("/admin/users/pending");
+      setPendingUsers(Array.isArray(data.users) ? data.users : []);
+    } catch (e) {}
+  }, [isAdmin]);
+
+  const loadPendingBookings = useCallback(async () => {
+    if (!isAdmin) return;
+    try {
+      const { data } = await api.get("/admin/bookings/pending");
+      setPendingBookings(Array.isArray(data.bookings) ? data.bookings : []);
+    } catch (e) {}
+  }, [isAdmin]);
+
+  const approveUser = async (id) => {
+    try {
+      await api.post(`/admin/users/${id}/approve`);
+      setPendingUsers(prev => prev.filter(u => u._id !== id));
+      setFeedback("User approved successfully.");
+    } catch (e) {
+      setError("Failed to approve user.");
+    }
+  };
+
+  const approveBooking = async (id) => {
+    try {
+      await api.post(`/admin/bookings/${id}/approve`);
+      setPendingBookings(prev => prev.filter(b => b._id !== id));
+      setFeedback("Booking approved successfully.");
+    } catch (e) {
+      setError("Failed to approve booking.");
+    }
+  };
 
   useEffect(() => {
     const init = async () => {
       setError("");
       try {
         await syncMe();
+        if (isAdmin) {
+          loadPendingUsers();
+          loadPendingBookings();
+          loadPendingWithdrawals();
+        }
       } catch (requestError) {
         setError(requestError.response?.data?.message || "Failed to load profile.");
       }
@@ -274,6 +314,16 @@ function DashboardPage() {
       setError("Update failed.");
     } finally {
       setUpdatingBookingId(null);
+    }
+  };
+
+  const processWithdrawal = async (requestId, status) => {
+    try {
+      await api.patch(`/withdrawals/${requestId}/review`, { status });
+      await loadPendingWithdrawals();
+      setFeedback(`Withdrawal request ${status}.`);
+    } catch (err) {
+      setError("Failed to process withdrawal.");
     }
   };
 
@@ -419,42 +469,22 @@ function DashboardPage() {
                   </div>
                 </div>
 
-                {/* Quick Balance Add */}
-                <div className="xl:col-span-2 lms-card p-8 flex flex-col justify-between overflow-hidden relative">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-brand/10 blur-3xl -mr-16 -mt-16 rounded-full" />
-                  <div className="space-y-6 relative">
-                    <h3 className="text-xl font-bold text-white font-outfit">Fast Deposit</h3>
-                    <div className="space-y-4">
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Tokens to purchase</label>
-                        <div className="flex gap-2">
-                          <input 
-                            type="number" 
-                            value={topUpAmount}
-                            onChange={(e) => setTopUpAmount(e.target.value)}
-                            className="input-field h-12 flex-1"
-                          />
-                          <button 
-                            onClick={() => addTokens()}
-                            disabled={isAddingTokens}
-                            className="btn btn-primary h-12 px-6"
-                          >
-                            Buy
-                          </button>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        {[50, 100, 250].map(amt => (
-                          <button key={amt} onClick={() => addTokens(amt)} className="h-10 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all">+{amt}</button>
-                        ))}
-                      </div>
+                {/* Weekly Token Distribution notice */}
+                <div className="xl:col-span-2 lms-card p-8 bg-gradient-to-br from-brand/10 to-brand-dark/10 rounded-2xl relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-brand/5 blur-3xl -mr-32 -mt-32 rounded-full" />
+                  <div className="relative space-y-6">
+                    <div className="w-14 h-14 rounded-2xl bg-brand/20 border border-brand/30 flex items-center justify-center">
+                      <Sparkles className="w-7 h-7 text-brand-light" />
                     </div>
-                  </div>
-                  <div className="mt-8 pt-6 border-t border-white/5 flex items-start gap-3">
-                    <ShieldAlert className="w-4 h-4 text-slate-600 shrink-0" />
-                    <p className="text-[10px] text-slate-600 leading-relaxed uppercase font-bold tracking-tighter">
-                      Payments are secure. Tokens are held in Escrow for your protection during sessions.
-                    </p>
+                    <div>
+                      <h3 className="text-2xl font-bold text-white font-outfit mb-2">Weekly Token Giveaway</h3>
+                      <p className="text-slate-400 text-sm leading-relaxed max-w-md">
+                        Every Monday, active accounts automatically receive <span className="text-brand-light font-bold">50 free tokens</span> as a bonus for being part of the Learnova community.
+                      </p>
+                    </div>
+                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                      Next drop: Monday 00:00 UTC
+                    </div>
                   </div>
                 </div>
               </div>
@@ -778,66 +808,91 @@ function DashboardPage() {
           )}
 
           {activeTab === "admin" && isAdmin && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-10">
-              <div className="lms-card p-10 space-y-10">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-accent/10 flex items-center justify-center border border-accent/20">
-                      <ShieldAlert className="w-6 h-6 text-accent" />
-                    </div>
-                    <div>
-                      <h3 className="text-2xl font-bold text-white font-outfit leading-tight">Payout Management</h3>
-                      <p className="text-xs text-slate-500">Approve or reject withdrawal requests from verified instructors.</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-xs font-bold text-slate-400">
-                    <History className="w-4 h-4" /> Audit Logs
-                  </div>
-                </div>
-                
-                {pendingWithdrawals.length === 0 ? (
-                  <div className="py-24 text-center border-2 border-dashed border-white/5 rounded-3xl space-y-4">
-                    <CheckCircle2 className="w-12 h-12 text-slate-800 mx-auto" />
-                    <p className="text-slate-600 text-sm font-medium">All withdrawal queues are clear. Great work!</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {pendingWithdrawals.map((w) => (
-                      <div key={w._id} className="lms-card p-6 flex flex-col md:flex-row justify-between items-center gap-8 hover:border-accent/40 transition-all">
-                        <div className="flex gap-5 items-center w-full md:w-auto">
-                          <div className="w-14 h-14 rounded-2xl bg-accent/10 flex items-center justify-center border border-accent/20 shrink-0">
-                            <ArrowUpRight className="text-accent w-6 h-6" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-white font-bold truncate leading-tight">{w.teacher_id?.name || w.teacher_id?.email || "Platform Tutor"}</p>
-                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Requested {new Date(w.createdAt).toLocaleDateString()}</p>
-                          </div>
-                        </div>
-                        <div className="text-center w-full md:w-auto border-x border-white/5 px-8">
-                          <p className="text-2xl font-extrabold text-white font-outfit tracking-tighter">{w.amount} <span className="text-[10px] text-accent uppercase font-bold tracking-widest">TKN</span></p>
-                          <p className="text-[10px] text-slate-600 uppercase font-bold tracking-widest">Payout Valuation</p>
-                        </div>
-                        <div className="flex gap-2 w-full md:w-auto">
-                          <button 
-                            onClick={() => updateBookingStatus(w._id, "approved")}
-                            disabled={reviewingId === w._id}
-                            className="btn btn-primary bg-success border-success h-11 flex-1 md:flex-initial px-8"
-                          >
-                            Approve
-                          </button>
-                          <button 
-                            onClick={() => updateBookingStatus(w._id, "rejected")}
-                            disabled={reviewingId === w._id}
-                            className="btn btn-secondary h-11 flex-1 md:flex-initial px-8 text-red-400 border-red-500/20"
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
+              <div className="flex items-center gap-1 p-1 bg-white/5 rounded-2xl border border-white/5 w-fit">
+                {["accounts", "bookings", "withdrawals"].map(tab => (
+                  <button
+                    key={tab}
+                    onClick={() => setAdminSubTab(tab)}
+                    className={`px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${adminSubTab === tab ? 'bg-brand/10 text-brand-light border border-brand/20 shadow-lg shadow-brand/10' : 'text-slate-500 hover:text-slate-300'}`}
+                  >
+                    {tab}
+                  </button>
+                ))}
               </div>
+
+              {adminSubTab === "accounts" && (
+                <div className="lms-card p-8 space-y-6">
+                  <h4 className="text-xl font-bold text-white font-outfit">Pending Registrations</h4>
+                  {pendingUsers.length === 0 ? (
+                    <div className="py-20 text-center opacity-20 italic">No users awaiting approval.</div>
+                  ) : (
+                    <div className="space-y-4">
+                      {pendingUsers.map(u => (
+                        <div key={u._id} className="p-5 bg-white/5 border border-white/5 rounded-2xl flex justify-between items-center gap-6">
+                          <div>
+                            <p className="text-sm font-bold text-white">{u.name}</p>
+                            <p className="text-[10px] text-slate-500 uppercase tracking-wider">{u.email}</p>
+                          </div>
+                          <button onClick={() => approveUser(u._id)} className="btn btn-primary h-10 px-6 bg-success border-success text-[10px]">Approve Account</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {adminSubTab === "bookings" && (
+                <div className="lms-card p-8 space-y-6">
+                  <h4 className="text-xl font-bold text-white font-outfit">Session Approvals</h4>
+                  {pendingBookings.length === 0 ? (
+                    <div className="py-20 text-center opacity-20 italic">No bookings awaiting approval.</div>
+                  ) : (
+                    <div className="space-y-4">
+                      {pendingBookings.map(b => (
+                        <div key={b._id} className="p-5 bg-white/5 border border-white/5 rounded-2xl flex justify-between items-center gap-6">
+                          <div>
+                            <p className="text-sm font-bold text-white">{b.gig_id?.title || "Session"}</p>
+                            <p className="text-[10px] text-slate-500 uppercase tracking-wider">
+                              Student: {b.student_id?.name} | Tutor: {b.teacher_id?.name}
+                            </p>
+                          </div>
+                          <button onClick={() => approveBooking(b._id)} className="btn btn-primary h-10 px-6 bg-brand border-brand text-[10px]">Approve Booking</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {adminSubTab === "withdrawals" && (
+                <div className="lms-card p-8 space-y-6">
+                  <h4 className="text-xl font-bold text-white font-outfit">Payout Requests</h4>
+                  {pendingWithdrawals.length === 0 ? (
+                    <div className="py-20 text-center opacity-20 italic">No payout requests pending.</div>
+                  ) : (
+                    <div className="space-y-4">
+                      {pendingWithdrawals.map(w => (
+                        <div key={w._id} className="p-5 bg-white/5 border border-white/5 rounded-2xl flex justify-between items-center gap-6">
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center border border-accent/20">
+                              <ArrowUpRight className="w-5 h-5 text-accent" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-white">{w.teacher_id?.name || "Tutor"}</p>
+                              <p className="text-[10px] text-slate-500 uppercase tracking-widest">{w.amount} tokens</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={() => processWithdrawal(w._id, 'approved')} className="btn btn-primary h-10 px-4 bg-success border-success text-[10px]">Release</button>
+                            <button onClick={() => processWithdrawal(w._id, 'rejected')} className="btn btn-secondary h-10 px-4 text-red-400 border-red-500/20 text-[10px]">Reject</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </motion.div>
           )}
         </div>

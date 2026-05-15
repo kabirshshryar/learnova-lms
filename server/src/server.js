@@ -47,3 +47,6 @@ process.on('SIGTERM', async () => {
 
 startServer();
 
+// Initialize scheduled tasks
+require('./services/weekly-token.service');
+

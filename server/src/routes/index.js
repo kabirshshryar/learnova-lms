@@ -4,6 +4,7 @@ const gigRoutes = require('./gig.routes');
 const bookingRoutes = require('./booking.routes');
 const walletRoutes = require('./wallet.routes');
 const withdrawalRoutes = require('./withdrawal.routes');
+const adminRoutes = require('./admin.routes');
 
 const router = express.Router();
 
@@ -20,6 +21,7 @@ router.use('/gigs', gigRoutes);
 router.use('/bookings', bookingRoutes);
 router.use('/wallet', walletRoutes);
 router.use('/withdrawals', withdrawalRoutes);
+router.use('/admin', adminRoutes);
 
 module.exports = router;
 
