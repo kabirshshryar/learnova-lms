@@ -57,9 +57,9 @@ function App() {
           <nav className="hidden md:flex items-center gap-1">
             <NavLink to="/" active={location.pathname === "/"}>Home</NavLink>
             <NavLink to="/gigs" active={location.pathname === "/gigs"} icon={Search}>Explore</NavLink>
-            {token && (
+            {/* {token && (
               <NavLink to="/dashboard" active={location.pathname === "/dashboard"} icon={LayoutDashboard}>Dashboard</NavLink>
-            )}
+            )} */}
           </nav>
 
           {/* User Actions */}

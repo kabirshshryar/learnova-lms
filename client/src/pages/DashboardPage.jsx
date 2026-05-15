@@ -24,7 +24,8 @@ import {
   TrendingUp,
   MessageSquare,
   MoreVertical,
-  ExternalLink
+  ExternalLink,
+  Search
 } from "lucide-react";
 import api from "../api/axios";
 import { createSocketClient } from "../realtime/socket";
