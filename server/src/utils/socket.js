@@ -70,12 +70,25 @@ const initSocket = (httpServer) => {
         return;
       }
 
-      ioInstance.to(`booking:${bookingId}`).emit('chat:new_message', {
-        bookingId,
-        senderId: socket.user.id,
-        text: text.trim(),
-        createdAt: new Date().toISOString(),
-      });
+      try {
+        const Message = require('../models/message.model');
+        const newMessage = await Message.create({
+          booking_id: bookingId,
+          sender_id: socket.user.id,
+          text: text.trim(),
+        });
+
+        ioInstance.to(`booking:${bookingId}`).emit('chat:new_message', {
+          _id: newMessage._id,
+          bookingId: newMessage.booking_id,
+          senderId: newMessage.sender_id,
+          text: newMessage.text,
+          createdAt: newMessage.createdAt,
+        });
+      } catch (error) {
+        console.error('Error saving message:', error);
+        socket.emit('chat:error', { message: 'Failed to send message.' });
+      }
     });
   });
 

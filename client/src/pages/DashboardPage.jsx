@@ -32,6 +32,40 @@ import api from "../api/axios";
 import { createSocketClient } from "../realtime/socket";
 import { getUserId } from "../utils/user";
 
+const ADMIN_ENDPOINTS = {
+	// Candidate endpoints for "bookings this week" — edit to match your backend
+	bookingsPaths: [
+		"/admin/bookings/this-week",
+		"/admin/bookings/summary?period=week",
+		"/admin/bookings?period=week",
+		"/admin/reports/bookings?period=week",
+		"/admin/reports/bookings/week",
+		"/admin/stats/bookings/week",
+		"/reports/bookings?period=week",
+		"/admin/bookings" // fallback: fetch all and filter client-side
+	],
+	// Candidate endpoints for escrowed tokens — edit to match your backend
+	escrowPaths: [
+		"/admin/wallet/escrow",
+		"/admin/wallet/escrowed",
+		"/admin/wallet/summary",
+		"/admin/escrow",
+		"/admin/financial/escrow",
+		"/admin/reports/escrow",
+		"/admin/wallet" // fallback
+	],
+	// Candidate endpoints for active users count — edit to match your backend
+	usersPaths: [
+		"/admin/users/active_count",
+		"/admin/users/count/active",
+		"/admin/users/stats",
+		"/admin/users/summary",
+		"/admin/users/active",
+		"/admin/reports/users",
+		"/admin/users" // fallback: fetch list and count active client-side
+	]
+};
+
 const StatCard = ({ title, value, icon: Icon, trend, color = "brand" }) => (
   <motion.div 
     whileHover={{ y: -2 }}
@@ -90,7 +124,13 @@ function DashboardPage() {
   const [isAddingTokens, setIsAddingTokens] = useState(false);
   const [adminSubTab, setAdminSubTab] = useState("accounts");
   const [pendingUsers, setPendingUsers] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
   const [pendingBookings, setPendingBookings] = useState([]);
+  const [completedBookings, setCompletedBookings] = useState([]);
+  // Admin overview metrics
+  const [adminWeekBookings, setAdminWeekBookings] = useState(0);
+  const [adminEscrowTokens, setAdminEscrowTokens] = useState(0);
+  const [adminActiveUsers, setAdminActiveUsers] = useState(0);
   const [topUpAmount, setTopUpAmount] = useState("100");
   const [interestsDraft, setInterestsDraft] = useState("");
   const [isSavingInterests, setIsSavingInterests] = useState(false);
@@ -110,14 +150,64 @@ function DashboardPage() {
   const roles = Array.isArray(user?.roles) ? user.roles : [];
   const isTeacher = roles.includes("instructor") || roles.includes("admin");
   const isAdmin = roles.includes("admin");
-  const myUserId = getUserId(user);
+  // Ensure myUserId is always a string and available immediately (falls back to localStorage)
+  const myUserId = (() => {
+    const idFromUser = getUserId(user);
+    if (idFromUser) return String(idFromUser);
+    try {
+      const raw = localStorage.getItem("user");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return String(getUserId(parsed) || parsed._id || "");
+      }
+    } catch (e) {}
+    return "";
+  })();
 
   const syncMe = async () => {
     const { data } = await api.get("/auth/me");
-    setUser(data.user);
-    localStorage.setItem("user", JSON.stringify(data.user));
-    const list = Array.isArray(data.user?.interests) ? data.user.interests : [];
+    const me = data.user;
+    // persist profile
+    setUser(me);
+    localStorage.setItem("user", JSON.stringify(me));
+    const list = Array.isArray(me?.interests) ? me.interests : [];
     setInterestsDraft(list.join(", "));
+
+    // First-time login welcome bonus (100 tokens)
+    try {
+      const localFlag = localStorage.getItem("welcomeBonusClaimed");
+      const serverFlag = Boolean(me?.welcomeBonusGiven || me?.hasReceivedWelcomeBonus);
+      if (!localFlag && !serverFlag) {
+        // Try preferred bonus endpoint, fall back to topup
+        let awarded = false;
+        try {
+          await api.post("/wallet/bonus", { amount: 100, reason: "welcome_bonus" });
+          awarded = true;
+        } catch (err) {
+          try {
+            await api.post("/wallet/topup", { amount: 100, reason: "welcome_bonus" });
+            awarded = true;
+          } catch (err2) {
+            // leave awarded false
+          }
+        }
+
+        if (awarded) {
+          // Update local user walletBalance so UI reflects bonus immediately
+          const currentBalance = Number(me?.walletBalance ?? 0);
+          const newBalance = currentBalance + 100;
+          const updated = { ...me, walletBalance: newBalance };
+          setUser(updated);
+          localStorage.setItem("user", JSON.stringify(updated));
+          localStorage.setItem("welcomeBonusClaimed", "1");
+          setFeedback("Welcome bonus: 100 tokens credited to your wallet.");
+        }
+      }
+    } catch (e) {
+      // don't block login if bonus logic fails
+    }
+
+    return me; // return for immediate role checks by caller
   };
 
   const loadBookings = useCallback(async () => {
@@ -184,6 +274,42 @@ function DashboardPage() {
     } catch (e) {}
   }, [isAdmin]);
 
+  const loadAllUsers = useCallback(async () => {
+    if (!isAdmin) return;
+    try {
+      const { data } = await api.get("/admin/users");
+      setAllUsers(Array.isArray(data.users) ? data.users : []);
+    } catch (e) {}
+  }, [isAdmin]);
+
+  const loadCompletedBookings = useCallback(async () => {
+    if (!isAdmin) return;
+    try {
+      const { data } = await api.get("/admin/bookings/completed");
+      setCompletedBookings(Array.isArray(data.bookings) ? data.bookings : []);
+    } catch (e) {}
+  }, [isAdmin]);
+
+  const updateAccountStatus = async (id, status) => {
+    try {
+      await api.patch(`/admin/users/${id}/status`, { status });
+      setAllUsers(prev => prev.map(u => u._id === id ? { ...u, status } : u));
+      setFeedback(`User status updated to ${status}.`);
+    } catch (e) {
+      setError("Failed to update user status.");
+    }
+  };
+
+  const approvePayout = async (id) => {
+    try {
+      await api.post(`/admin/bookings/${id}/payout`);
+      setCompletedBookings(prev => prev.filter(b => b._id !== id));
+      setFeedback("Payout approved successfully.");
+    } catch (e) {
+      setError("Failed to approve payout.");
+    }
+  };
+
   const approveUser = async (id) => {
     try {
       await api.post(`/admin/users/${id}/approve`);
@@ -204,15 +330,85 @@ function DashboardPage() {
     }
   };
 
+  const loadAdminOverview = useCallback(async () => {
+    if (!isAdmin) return;
+
+    const tryEndpoints = async (paths) => {
+      for (const p of paths) {
+        try {
+          const res = await api.get(p);
+          if (res && res.status >= 200 && res.status < 300) return res;
+        } catch (err) {
+          // try next
+        }
+      }
+      return null;
+    };
+
+    try {
+      // Allow runtime override via window.ADMIN_ENDPOINTS (useful for quick adaptation)
+      const endpoints = (typeof window !== "undefined" && window.ADMIN_ENDPOINTS) ? window.ADMIN_ENDPOINTS : ADMIN_ENDPOINTS;
+
+      const [bookingsRes, escrowRes, usersRes] = await Promise.all([
+        tryEndpoints(endpoints.bookingsPaths),
+        tryEndpoints(endpoints.escrowPaths),
+        tryEndpoints(endpoints.usersPaths),
+      ]);
+
+      // Bookings this week
+      let weekCount = 0;
+      if (bookingsRes) {
+        weekCount = bookingsRes.data?.count ?? (Array.isArray(bookingsRes.data?.bookings) ? bookingsRes.data.bookings.length : 0);
+        // if returned an array at top-level, try to count week items
+        if (!weekCount && Array.isArray(bookingsRes.data)) {
+          const now = new Date();
+          const start = new Date(now);
+          start.setDate(now.getDate() - now.getDay()); // week start (Sun)
+          start.setHours(0,0,0,0);
+          const end = new Date(start);
+          end.setDate(start.getDate() + 7);
+          weekCount = bookingsRes.data.filter(b => {
+            const t = new Date(b.time);
+            return t >= start && t < end;
+          }).length;
+        }
+      }
+
+      // Escrow tokens
+      const escrowAmount = escrowRes?.data?.total ?? escrowRes?.data?.amount ?? escrowRes?.data?.escrow ?? 0;
+
+      // Active users
+      let activeUsers = usersRes?.data?.count ?? usersRes?.data?.active ?? 0;
+      if (!activeUsers && Array.isArray(usersRes?.data)) {
+        // if endpoint returned list, count active status
+        activeUsers = usersRes.data.filter(u => u.status === "active").length;
+      }
+      if (!activeUsers && usersRes?.data?.users && Array.isArray(usersRes.data.users)) {
+        activeUsers = usersRes.data.users.filter(u => u.status === "active").length;
+      }
+
+      setAdminWeekBookings(weekCount);
+      setAdminEscrowTokens(escrowAmount);
+      setAdminActiveUsers(activeUsers);
+    } catch (e) {
+      // silent fail - admin overview is optional
+    }
+  }, [isAdmin]);
+
   useEffect(() => {
     const init = async () => {
       setError("");
       try {
-        await syncMe();
-        if (isAdmin) {
+        const me = await syncMe();
+        const rolesFromMe = Array.isArray(me?.roles) ? me.roles : [];
+        const meIsAdmin = rolesFromMe.includes("admin");
+        if (meIsAdmin) {
           loadPendingUsers();
           loadPendingBookings();
           loadPendingWithdrawals();
+          loadAllUsers();
+          loadCompletedBookings();
+          loadAdminOverview();
         }
       } catch (requestError) {
         setError(requestError.response?.data?.message || "Failed to load profile.");
@@ -257,6 +453,35 @@ function DashboardPage() {
 
     return () => socket.disconnect();
   }, [loadBookings, loadTransactions]);
+
+  useEffect(() => {
+    if (!updatingBookingId) return;
+
+    const fetchChat = async () => {
+      try {
+        const { data } = await api.get(`/bookings/${updatingBookingId}/chat`);
+        setChatMessages(prev => ({
+          ...prev,
+          [updatingBookingId]: data.messages.map(m => ({
+            _id: m._id,
+            bookingId: m.booking_id,
+            senderId: m.sender_id,
+            text: m.text,
+            createdAt: m.createdAt
+          }))
+        }));
+
+        // Join the socket room for this booking
+        if (socketRef.current) {
+          socketRef.current.emit('chat:join_booking', { bookingId: updatingBookingId });
+        }
+      } catch (err) {
+        console.error("Failed to load chat history", err);
+      }
+    };
+
+    fetchChat();
+  }, [updatingBookingId]);
 
   const addNotification = (text) => {
     setNotifications((prev) => [
@@ -304,14 +529,20 @@ function DashboardPage() {
   };
 
   const updateBookingStatus = async (bookingId, status) => {
+    let meetingLink = "";
+    if (status === 'confirmed') {
+      meetingLink = window.prompt("Enter meeting link (Google Meet, Jitsi, etc.)", `https://meet.jit.si/${bookingId}`);
+      if (meetingLink === null) return; // Cancelled prompt
+    }
+
     setUpdatingBookingId(bookingId);
     try {
-      await api.patch(`/bookings/${bookingId}/status`, { status });
+      await api.patch(`/bookings/${bookingId}/status`, { status, meetingLink });
       await loadBookings();
       await syncMe();
       setFeedback(`Session status updated to ${status}.`);
     } catch (err) {
-      setError("Update failed.");
+      setError(err.response?.data?.message || "Update failed.");
     } finally {
       setUpdatingBookingId(null);
     }
@@ -358,7 +589,8 @@ function DashboardPage() {
 
           <nav className="space-y-1">
             <NavItem active={activeTab === "overview"} onClick={() => setActiveTab("overview")} icon={LayoutDashboard}>Overview</NavItem>
-            <NavItem active={activeTab === "bookings"} onClick={() => setActiveTab("bookings")} icon={BookOpen}>My Sessions</NavItem>
+            {/* hide "My Sessions" for admin users */}
+            {!isAdmin && <NavItem active={activeTab === "bookings"} onClick={() => setActiveTab("bookings")} icon={BookOpen}>My Sessions</NavItem>}
             <NavItem active={activeTab === "wallet"} onClick={() => setActiveTab("wallet")} icon={Wallet}>Wallet & Tx</NavItem>
             <NavItem active={activeTab === "profile"} onClick={() => setActiveTab("profile")} icon={Settings}>Settings</NavItem>
             {isAdmin && <NavItem active={activeTab === "admin"} onClick={() => setActiveTab("admin")} icon={ShieldAlert}>Admin Panel</NavItem>}
@@ -438,6 +670,15 @@ function DashboardPage() {
                 <StatCard title="Completed Goals" value="14" icon={CheckCircle2} color="brand" />
               </div>
 
+              {/* Admin-only overview metrics */}
+              {isAdmin && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                  <StatCard title="Bookings This Week" value={adminWeekBookings} icon={BookOpen} color="brand" />
+                  <StatCard title="Tokens in Escrow" value={`${adminEscrowTokens} TKN`} icon={CreditCard} color="success" />
+                  <StatCard title="Active Users" value={adminActiveUsers} icon={UserIcon} color="brand" />
+                </div>
+              )}
+
               <div className="grid xl:grid-cols-5 gap-8">
                 {/* Upcoming Schedule */}
                 <div className="xl:col-span-3 lms-card p-8">
@@ -455,7 +696,12 @@ function DashboardPage() {
                         <div className="flex-1 min-w-0">
                           <h4 className="text-sm font-bold text-white truncate">{booking.gig_id?.title || "Specialized Session"}</h4>
                           <p className="text-[11px] text-slate-500 font-medium flex items-center gap-2 mt-1">
-                            <Clock className="w-3 h-3" /> {new Date(booking.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            <Clock className="w-3 h-3" />
+                            {new Date(booking.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            <span className="mx-2 opacity-60">·</span>
+                            <span className="text-[11px] text-slate-400">
+                              {new Date(booking.time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </span>
                           </p>
                         </div>
                         <div className="badge badge-success shrink-0">Confirmed</div>
@@ -542,30 +788,71 @@ function DashboardPage() {
                               </div>
                             </div>
                             <div className="flex flex-wrap gap-x-6 gap-y-1.5 text-xs text-slate-500 font-medium">
-                              <span className="flex items-center gap-2"><Clock className="w-3.5 h-3.5" /> {new Date(booking.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                              <span className="flex items-center gap-2">
+                                <Clock className="w-3.5 h-3.5" />
+                                {new Date(booking.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                <span className="mx-2 opacity-60">·</span>
+                                <span className="text-[11px] text-slate-400">
+                                  {new Date(booking.time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </span>
+                              </span>
                               <span className="flex items-center gap-2"><UserIcon className="w-3.5 h-3.5" /> {booking.teacher_id?.name || "Verified Tutor"}</span>
                               <span className="flex items-center gap-2"><CreditCard className="w-3.5 h-3.5" /> {booking.gig_id?.price || 0} TKN</span>
                             </div>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3 w-full md:w-auto shrink-0">
+                        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto shrink-0">
                           {booking.status === 'confirmed' && (
                             <button 
-                              onClick={() => window.open(`https://meet.jit.si/${booking._id}`, '_blank')}
-                              className="btn btn-primary h-12 flex-1 md:flex-initial px-6 shadow-xl shadow-success/10 bg-success border-success-dark"
+                              disabled={new Date(booking.time) > new Date()}
+                              onClick={() => window.open(booking.meetingLink || `https://meet.jit.si/${booking._id}`, '_blank')}
+                              className={`btn h-12 flex-1 md:flex-initial px-6 shadow-xl transition-all ${
+                                new Date(booking.time) > new Date() 
+                                ? 'bg-slate-800 border-white/5 text-slate-500 cursor-not-allowed' 
+                                : 'bg-success border-success-dark text-white shadow-success/10'
+                              }`}
                             >
-                              <Video className="w-4 h-4" /> Join Live
+                              <Video className="w-4 h-4" /> 
+                              {new Date(booking.time) > new Date() ? 'Starts Soon' : 'Join Live'}
                             </button>
                           )}
+
+                          {/* Tutor: Mark session completed when confirmed */}
+                          {String(booking.teacher_id?._id || booking.teacher_id) === String(myUserId) && booking.status === 'confirmed' && (
+                            <button
+                              onClick={() => {
+                                if (!window.confirm('Mark this session as completed?')) return;
+                                updateBookingStatus(booking._id, 'completed');
+                              }}
+                              className="btn h-12 px-6 bg-brand/10 border border-brand/20 text-white hover:bg-brand/20 transition-all"
+                            >
+                              Mark Completed
+                            </button>
+                          )}
+                          
+                          {isTeacher && booking.status === 'pending' && String(booking.teacher_id?._id || booking.teacher_id) === myUserId && (
+                            <div className="flex gap-2 flex-1 md:flex-initial">
+                              <button 
+                                onClick={() => updateBookingStatus(booking._id, 'confirmed')}
+                                className="btn btn-primary h-12 flex-1 px-4 bg-success border-success-dark"
+                              >
+                                Approve
+                              </button>
+                              <button 
+                                onClick={() => updateBookingStatus(booking._id, 'cancelled')}
+                                className="btn btn-secondary h-12 flex-1 px-4 text-red-400 border-red-500/10"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          )}
+
                           <button 
                             className={`p-3.5 rounded-xl border transition-all ${updatingBookingId === booking._id ? 'bg-brand text-white border-brand shadow-lg shadow-brand/20' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'}`}
                             onClick={() => setUpdatingBookingId(booking._id === updatingBookingId ? null : booking._id)}
                           >
                             <MessageSquare className="w-5 h-5" />
-                          </button>
-                          <button className="p-3.5 bg-white/5 border border-white/10 text-slate-500 hover:text-white rounded-xl">
-                            <MoreVertical className="w-5 h-5" />
                           </button>
                         </div>
                       </div>
@@ -810,7 +1097,7 @@ function DashboardPage() {
           {activeTab === "admin" && isAdmin && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
               <div className="flex items-center gap-1 p-1 bg-white/5 rounded-2xl border border-white/5 w-fit">
-                {["accounts", "bookings", "withdrawals"].map(tab => (
+                {["accounts", "users", "payouts", "withdrawals"].map(tab => (
                   <button
                     key={tab}
                     onClick={() => setAdminSubTab(tab)}
@@ -842,22 +1129,77 @@ function DashboardPage() {
                 </div>
               )}
 
-              {adminSubTab === "bookings" && (
+              {adminSubTab === "users" && (
                 <div className="lms-card p-8 space-y-6">
-                  <h4 className="text-xl font-bold text-white font-outfit">Session Approvals</h4>
-                  {pendingBookings.length === 0 ? (
-                    <div className="py-20 text-center opacity-20 italic">No bookings awaiting approval.</div>
+                  <h4 className="text-xl font-bold text-white font-outfit">User Management</h4>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-white/5">
+                          <th className="px-4 py-3">Name</th>
+                          <th className="px-4 py-3">Roles</th>
+                          <th className="px-4 py-3">Status</th>
+                          <th className="px-4 py-3 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {allUsers.map(u => (
+                          <tr key={u._id} className="text-xs hover:bg-white/[0.02]">
+                            <td className="px-4 py-4">
+                              <p className="text-white font-bold">{u.name}</p>
+                              <p className="text-slate-500">{u.email}</p>
+                            </td>
+                            <td className="px-4 py-4">
+                              <div className="flex gap-1">
+                                {u.roles.map(r => <span key={r} className="px-2 py-0.5 bg-white/5 rounded text-[8px]">{r}</span>)}
+                              </div>
+                            </td>
+                            <td className="px-4 py-4">
+                              <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase ${
+                                u.status === 'active' ? 'bg-success/10 text-success' : 
+                                u.status === 'restricted' ? 'bg-warning/10 text-warning' : 
+                                'bg-slate-500/10 text-slate-500'
+                              }`}>
+                                {u.status}
+                              </span>
+                            </td>
+                            <td className="px-4 py-4 text-right">
+                              <div className="flex justify-end gap-2">
+                                {u.status !== 'active' && <button onClick={() => updateAccountStatus(u._id, 'active')} className="p-1.5 text-success hover:bg-success/10 rounded-lg transition-all"><CheckCircle2 className="w-4 h-4" /></button>}
+                                {u.status === 'active' && <button onClick={() => updateAccountStatus(u._id, 'restricted')} className="p-1.5 text-warning hover:bg-warning/10 rounded-lg transition-all"><ShieldAlert className="w-4 h-4" /></button>}
+                                <button onClick={() => updateAccountStatus(u._id, 'deleted')} className="p-1.5 text-red-400 hover:bg-red-500/10 rounded-lg transition-all"><XCircle className="w-4 h-4" /></button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+
+
+              {adminSubTab === "payouts" && (
+                <div className="lms-card p-8 space-y-6">
+                  <h4 className="text-xl font-bold text-white font-outfit">Session Payout Approvals</h4>
+                  <p className="text-xs text-slate-500">Review completed sessions and release escrowed tokens to tutors.</p>
+                  {completedBookings.length === 0 ? (
+                    <div className="py-20 text-center opacity-20 italic">No completed sessions awaiting payout.</div>
                   ) : (
                     <div className="space-y-4">
-                      {pendingBookings.map(b => (
+                      {completedBookings.map(b => (
                         <div key={b._id} className="p-5 bg-white/5 border border-white/5 rounded-2xl flex justify-between items-center gap-6">
                           <div>
-                            <p className="text-sm font-bold text-white">{b.gig_id?.title || "Session"}</p>
-                            <p className="text-[10px] text-slate-500 uppercase tracking-wider">
-                              Student: {b.student_id?.name} | Tutor: {b.teacher_id?.name}
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-bold text-white">{b.gig_id?.title || "Session"}</p>
+                              <span className="badge badge-success text-[8px]">COMPLETED</span>
+                            </div>
+                            <p className="text-[10px] text-slate-500 uppercase tracking-wider mt-1">
+                              Tutor: <span className="text-white">{b.teacher_id?.name}</span> | Amount: <span className="text-brand-light">{b.gig_id?.price} TKN</span>
                             </p>
                           </div>
-                          <button onClick={() => approveBooking(b._id)} className="btn btn-primary h-10 px-6 bg-brand border-brand text-[10px]">Approve Booking</button>
+                          <button onClick={() => approvePayout(b._id)} className="btn btn-primary h-10 px-6 bg-success border-success text-[10px]">Approve Payout</button>
                         </div>
                       ))}
                     </div>

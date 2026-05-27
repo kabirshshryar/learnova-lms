@@ -79,6 +79,13 @@ const login = async (req, res) => {
       return res.status(401).json({ message: 'Invalid email or password.' });
     }
 
+    if (user.status === 'restricted') {
+      return res.status(403).json({ message: 'Your account has been restricted. Please contact support.' });
+    }
+    if (user.status === 'deleted') {
+      return res.status(403).json({ message: 'This account no longer exists.' });
+    }
+
     const isPasswordValid = await user.comparePassword(password);
     if (!isPasswordValid) {
       return res.status(401).json({ message: 'Invalid email or password.' });

@@ -177,7 +177,7 @@ const updateBookingStatus = async (req, res) => {
 
   try {
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, meetingLink } = req.body;
     const allowedStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
     const transitionMap = {
       pending: ['confirmed', 'cancelled'],
@@ -208,9 +208,14 @@ const updateBookingStatus = async (req, res) => {
       }
 
       const actorRoles = Array.isArray(actor.roles) ? actor.roles : [];
-      const isAdmin = actorRoles.includes('admin');
       const isOwnerTeacher = booking.teacher_id.toString() === req.user.id;
 
+      // If approving (confirming), it MUST be the teacher.
+      if (status === 'confirmed' && !isOwnerTeacher) {
+        throw new Error('ONLY_TEACHER_CAN_APPROVE');
+      }
+
+      const isAdmin = actorRoles.includes('admin');
       if (!isAdmin && !isOwnerTeacher) {
         throw new Error('NOT_BOOKING_OWNER');
       }
@@ -256,37 +261,10 @@ const updateBookingStatus = async (req, res) => {
         );
       }
 
-      // Release escrow to teacher withdrawable balance on completion.
-      if (status === 'completed' && booking.escrowStatus === 'held') {
-        const teacher = await User.findById(booking.teacher_id)
-          .select('withdrawableBalance')
-          .session(session);
+      // Escrow release logic removed from here. Admin will manually release it after review.
 
-        if (!teacher) {
-          throw new Error('TEACHER_NOT_FOUND');
-        }
-
-        const withdrawableBefore = User.withdrawableAmount(teacher);
-        teacher.withdrawableBalance = withdrawableBefore + booking.escrowAmount;
-        await teacher.save({ session });
-
-        booking.escrowStatus = 'released';
-
-        await Transaction.create(
-          [
-            {
-              user_id: booking.teacher_id,
-              operation: 'topup',
-              amount: booking.escrowAmount,
-              balanceBefore: withdrawableBefore,
-              balanceAfter: teacher.withdrawableBalance,
-              referenceType: 'booking',
-              referenceId: booking._id,
-              description: 'Escrow released to teacher after booking completion.',
-            },
-          ],
-          { session }
-        );
+      if (status === 'confirmed' && meetingLink) {
+        booking.meetingLink = meetingLink;
       }
 
       booking.status = status;
@@ -334,6 +312,11 @@ const updateBookingStatus = async (req, res) => {
     if (error.message === 'NOT_BOOKING_OWNER') {
       return res.status(403).json({
         message: 'Access denied. Only the owner teacher can update this booking.',
+      });
+    }
+    if (error.message === 'ONLY_TEACHER_CAN_APPROVE') {
+      return res.status(403).json({
+        message: 'Access denied. Only the assigned teacher can approve this session.',
       });
     }
     if (error.message === 'STUDENT_NOT_FOUND') {
@@ -396,8 +379,39 @@ const getMyBookings = async (req, res) => {
   }
 };
 
+const getChatHistory = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid booking ID.' });
+    }
+
+    const booking = await Booking.findById(id).select('student_id teacher_id');
+    if (!booking) {
+      return res.status(404).json({ message: 'Booking not found.' });
+    }
+
+    const isParticipant =
+      booking.student_id.toString() === req.user.id ||
+      booking.teacher_id.toString() === req.user.id;
+
+    if (!isParticipant) {
+      return res.status(403).json({ message: 'Access denied.' });
+    }
+
+    const Message = require('../models/message.model');
+    const messages = await Message.find({ booking_id: id }).sort({ createdAt: 1 });
+
+    return res.status(200).json({ messages });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   createBooking,
   updateBookingStatus,
   getMyBookings,
+  getChatHistory,
 };

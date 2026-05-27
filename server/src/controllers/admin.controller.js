@@ -1,7 +1,18 @@
-// server/src/controllers/admin.controller.js
 const User = require('../models/user.model');
 const Booking = require('../models/booking.model');
+const Transaction = require('../models/transaction.model');
 const { getIO } = require('../utils/socket');
+const mongoose = require('mongoose');
+
+/** List all users */
+exports.listAllUsers = async (req, res) => {
+  try {
+    const users = await User.find({ status: { $ne: 'deleted' } }).select('-password').sort({ createdAt: -1 });
+    res.json({ users });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+};
 
 /** List pending users (status === 'pending') */
 exports.listPendingUsers = async (req, res) => {
@@ -25,47 +36,92 @@ exports.approveUser = async (req, res) => {
   }
 };
 
-/** List pending bookings (status === 'pending') */
-exports.listPendingBookings = async (req, res) => {
+/** Update user status (restrict/delete/active) */
+exports.updateUserStatus = async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+  const allowed = ['active', 'restricted', 'deleted'];
+
+  if (!allowed.includes(status)) {
+    return res.status(400).json({ message: 'Invalid status' });
+  }
+
   try {
-    const bookings = await Booking.find({ status: 'pending' })
-      .populate('teacher_id', 'name')
-      .populate('student_id', 'name')
-      .populate('gig_id', 'title');
+    const user = await User.findByIdAndUpdate(id, { status }, { new: true });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json({ message: `User status updated to ${status}`, user });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+};
+
+
+
+
+
+/** List completed bookings awaiting payout approval */
+exports.listCompletedBookings = async (req, res) => {
+  try {
+    const bookings = await Booking.find({ 
+      status: 'completed',
+      escrowStatus: 'held'
+    })
+      .populate('teacher_id', 'name email')
+      .populate('student_id', 'name email')
+      .populate('gig_id', 'title price');
     res.json({ bookings });
   } catch (e) {
     res.status(500).json({ message: e.message });
   }
 };
 
-/** Approve a booking – set status to 'confirmed' */
-exports.approveBooking = async (req, res) => {
+/** Approve payout for a completed session */
+exports.approvePayout = async (req, res) => {
   const { id } = req.params;
+  const session = await mongoose.startSession();
+
   try {
-    const booking = await Booking.findById(id);
-    if (!booking) return res.status(404).json({ message: 'Booking not found' });
-    if (booking.status !== 'pending') return res.status(400).json({ message: 'Booking not pending' });
+    await session.withTransaction(async () => {
+      const booking = await Booking.findById(id).session(session);
+      if (!booking) throw new Error('BOOKING_NOT_FOUND');
+      if (booking.status !== 'completed' || booking.escrowStatus !== 'held') {
+        throw new Error('INVALID_BOOKING_STATE');
+      }
 
-    booking.status = 'confirmed';
-    await booking.save();
+      const teacher = await User.findById(booking.teacher_id)
+        .select('withdrawableBalance')
+        .session(session);
 
-    // Notify participants via socket
-    const io = getIO();
-    if (io) {
-      io.to(`user:${booking.student_id}`).emit('booking:status_updated', {
-        message: 'Your session has been approved',
-        bookingId: booking._id,
-        status: 'confirmed',
-      });
-      io.to(`user:${booking.teacher_id}`).emit('booking:status_updated', {
-        message: 'A session has been approved',
-        bookingId: booking._id,
-        status: 'confirmed',
-      });
-    }
+      if (!teacher) throw new Error('TEACHER_NOT_FOUND');
 
-    res.json({ message: 'Booking approved', booking });
-  } catch (e) {
-    res.status(500).json({ message: e.message });
+      const withdrawableBefore = User.withdrawableAmount(teacher);
+      teacher.withdrawableBalance = withdrawableBefore + booking.escrowAmount;
+      await teacher.save({ session });
+
+      booking.escrowStatus = 'released';
+      await booking.save({ session });
+
+      await Transaction.create(
+        [
+          {
+            user_id: booking.teacher_id,
+            operation: 'topup',
+            amount: booking.escrowAmount,
+            balanceBefore: withdrawableBefore,
+            balanceAfter: teacher.withdrawableBalance,
+            referenceType: 'booking',
+            referenceId: booking._id,
+            description: 'Escrow released by admin after session review.',
+          },
+        ],
+        { session }
+      );
+    });
+
+    res.json({ message: 'Payout approved successfully.' });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  } finally {
+    await session.endSession();
   }
 };
