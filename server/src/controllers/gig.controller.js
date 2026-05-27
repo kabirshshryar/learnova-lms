@@ -58,11 +58,33 @@ const getAllGigs = async (req, res) => {
     const filters = {};
 
     if (search) {
+      const matchingTeachers = await User.find({
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { education: { $regex: search, $options: 'i' } },
+          { certification: { $regex: search, $options: 'i' } },
+          { experience: { $regex: search, $options: 'i' } },
+          { description: { $regex: search, $options: 'i' } },
+        ],
+      }).select('_id');
+
+      const teacherIds = matchingTeachers.map((t) => t._id);
+
       filters.$or = [
         { title: { $regex: search, $options: 'i' } },
         { description: { $regex: search, $options: 'i' } },
         { tags: { $regex: search, $options: 'i' } },
       ];
+
+      if (teacherIds.length) {
+        filters.$or.push({ teacher_id: { $in: teacherIds } });
+      }
+
+      const searchNum = Number(search);
+      if (!isNaN(searchNum) && isFinite(searchNum)) {
+        filters.$or.push({ price: searchNum });
+        filters.$or.push({ duration: searchNum });
+      }
     }
 
     if (tags) {

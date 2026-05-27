@@ -512,7 +512,7 @@ function GigsPage() {
         </aside>
 
         <div className="lg:col-span-8 space-y-16">
-          {!isLoading && recommendedGigs.length > 0 && (
+          {!isLoading && recommendedGigs.length > 0 && !searchQuery.trim() && (
             <section className="space-y-8">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
