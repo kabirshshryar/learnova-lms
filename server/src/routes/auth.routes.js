@@ -5,6 +5,7 @@ const {
   getMe,
   becomeInstructor,
   updateMyInterests,
+  updateProfile,
 } = require('../controllers/auth.controller');
 const { verifyToken } = require('../middlewares/auth.middleware');
 
@@ -13,6 +14,7 @@ const router = express.Router();
 router.post('/register', register);
 router.post('/login', login);
 router.get('/me', verifyToken, getMe);
+router.patch('/me', verifyToken, updateProfile);
 router.patch('/me/become-instructor', verifyToken, becomeInstructor);
 router.patch('/me/interests', verifyToken, updateMyInterests);
 

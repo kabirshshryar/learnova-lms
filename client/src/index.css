@@ -306,7 +306,7 @@ html.light {
   }
 
   .text-slate-500.uppercase,
-  .text-[10px].text-slate-500 {
+  .text-\[10px\].text-slate-500 {
     color: #475569 !important;
   }
 

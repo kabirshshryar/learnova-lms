@@ -195,10 +195,54 @@ const updateMyInterests = async (req, res) => {
   }
 };
 
+const updateProfile = async (req, res) => {
+  try {
+    const { name, description, education, certification, experience, interests } = req.body;
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    if (name !== undefined) user.name = name.trim();
+    if (description !== undefined) user.description = description.trim();
+    if (education !== undefined) user.education = education.trim();
+    if (certification !== undefined) user.certification = certification.trim();
+    if (experience !== undefined) user.experience = experience.trim();
+
+    if (interests !== undefined && Array.isArray(interests)) {
+      user.interests = [
+        ...new Set(
+          interests
+            .map((tag) => String(tag).trim().toLowerCase())
+            .filter(Boolean)
+            .slice(0, 20)
+        ),
+      ];
+    }
+
+    await user.save();
+
+    const payload = user.toObject();
+    payload.id = user._id;
+    payload.walletBalance = User.walletAmount(user);
+    payload.withdrawableBalance = User.withdrawableAmount(user);
+    delete payload.password;
+
+    return res.status(200).json({
+      message: 'Profile updated successfully.',
+      user: payload,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   register,
   login,
   getMe,
   becomeInstructor,
   updateMyInterests,
+  updateProfile,
 };

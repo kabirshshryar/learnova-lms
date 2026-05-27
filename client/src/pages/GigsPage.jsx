@@ -85,6 +85,39 @@ const GigCard = ({ gig, variant, token, isStudent, isTeacher, myId, onBook, onDe
             {gig.tags.length > 3 && <span className="text-[9px] font-bold text-slate-600">+{gig.tags.length - 3}</span>}
           </div>
         )}
+
+        {(gig.teacher_id?.education || gig.teacher_id?.certification || gig.teacher_id?.experience || gig.teacher_id?.description) && (
+          <div className="pt-3 border-t border-white/5 space-y-2">
+            <div className="text-[10px] font-bold text-brand-light uppercase tracking-wider">Tutor Qualifications</div>
+            
+            {gig.teacher_id?.description && (
+              <p className="text-slate-400 text-xs italic leading-relaxed line-clamp-2">
+                "{gig.teacher_id.description}"
+              </p>
+            )}
+
+            <div className="grid grid-cols-1 gap-1 text-[11px] text-slate-400">
+              {gig.teacher_id?.education && (
+                <div className="flex items-start gap-1.5">
+                  <span className="text-slate-500 font-bold shrink-0">Education:</span>
+                  <span className="font-medium text-slate-300 leading-snug">{gig.teacher_id.education}</span>
+                </div>
+              )}
+              {gig.teacher_id?.experience && (
+                <div className="flex items-start gap-1.5">
+                  <span className="text-slate-500 font-bold shrink-0">Experience:</span>
+                  <span className="font-medium text-slate-300 leading-snug">{gig.teacher_id.experience}</span>
+                </div>
+              )}
+              {gig.teacher_id?.certification && (
+                <div className="flex items-start gap-1.5">
+                  <span className="text-slate-500 font-bold shrink-0">Certifications:</span>
+                  <span className="font-medium text-slate-300 leading-snug">{gig.teacher_id.certification}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="px-6 py-5 bg-white/[0.02] border-t border-white/5 mt-auto">

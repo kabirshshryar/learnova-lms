@@ -133,6 +133,11 @@ function DashboardPage() {
   const [adminActiveUsers, setAdminActiveUsers] = useState(0);
   const [topUpAmount, setTopUpAmount] = useState("100");
   const [interestsDraft, setInterestsDraft] = useState("");
+  const [nameDraft, setNameDraft] = useState(user?.name || "");
+  const [descriptionDraft, setDescriptionDraft] = useState(user?.description || "");
+  const [educationDraft, setEducationDraft] = useState(user?.education || "");
+  const [certificationDraft, setCertificationDraft] = useState(user?.certification || "");
+  const [experienceDraft, setExperienceDraft] = useState(user?.experience || "");
   const [isSavingInterests, setIsSavingInterests] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [withdrawNote, setWithdrawNote] = useState("");
@@ -172,6 +177,11 @@ function DashboardPage() {
     localStorage.setItem("user", JSON.stringify(me));
     const list = Array.isArray(me?.interests) ? me.interests : [];
     setInterestsDraft(list.join(", "));
+    setNameDraft(me?.name || "");
+    setDescriptionDraft(me?.description || "");
+    setEducationDraft(me?.education || "");
+    setCertificationDraft(me?.certification || "");
+    setExperienceDraft(me?.experience || "");
 
     // First-time login welcome bonus (100 tokens)
     try {
@@ -513,14 +523,21 @@ function DashboardPage() {
     }
   };
 
-  const saveInterests = async (e) => {
+  const saveProfile = async (e) => {
     e.preventDefault();
     setIsSavingInterests(true);
     const tags = interestsDraft.split(",").map(t => t.trim().toLowerCase()).filter(Boolean);
     try {
-      await api.patch("/auth/me/interests", { interests: tags });
+      await api.patch("/auth/me", {
+        name: nameDraft,
+        description: descriptionDraft,
+        education: educationDraft,
+        certification: certificationDraft,
+        experience: experienceDraft,
+        interests: tags,
+      });
       await syncMe();
-      setFeedback("Professional interests updated.");
+      setFeedback("Profile information updated successfully.");
     } catch (err) {
       setError("Failed to save profile changes.");
     } finally {
@@ -1042,12 +1059,74 @@ function DashboardPage() {
                   </div>
                 </div>
 
-                <form onSubmit={saveInterests} className="space-y-10">
-                  <div className="space-y-6">
+                <form onSubmit={saveProfile} className="space-y-8">
+                  {/* Full Name & Education */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase ml-1">Full Name</label>
+                      <input 
+                        type="text"
+                        value={nameDraft}
+                        onChange={(e) => setNameDraft(e.target.value)}
+                        className="input-field h-12"
+                        placeholder="Your full name"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase ml-1">Education Background</label>
+                      <input 
+                        type="text"
+                        value={educationDraft}
+                        onChange={(e) => setEducationDraft(e.target.value)}
+                        className="input-field h-12"
+                        placeholder="e.g. B.Sc. in Computer Science from MIT"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Certifications & Experience */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase ml-1">Certifications</label>
+                      <input 
+                        type="text"
+                        value={certificationDraft}
+                        onChange={(e) => setCertificationDraft(e.target.value)}
+                        className="input-field h-12"
+                        placeholder="e.g. AWS Certified Solutions Architect, PMP"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase ml-1">Professional Experience</label>
+                      <input 
+                        type="text"
+                        value={experienceDraft}
+                        onChange={(e) => setExperienceDraft(e.target.value)}
+                        className="input-field h-12"
+                        placeholder="e.g. 5+ years of Engineering at Google, Lead at Stripe"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Bio / Description */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-500 uppercase ml-1">Professional Bio / Description</label>
+                    <textarea 
+                      value={descriptionDraft}
+                      onChange={(e) => setDescriptionDraft(e.target.value)}
+                      className="input-field resize-none py-3"
+                      rows={3}
+                      placeholder="Introduce yourself to prospective students and present your expertise..."
+                    />
+                  </div>
+
+                  {/* Expertise / Interests */}
+                  <div className="space-y-4">
                     <div className="flex justify-between items-end">
                       <div className="space-y-1">
-                        <h4 className="text-sm font-bold text-white uppercase tracking-wider">Expertise & Interests</h4>
-                        <p className="text-xs text-slate-500">List categories separated by commas to refine your recommendations.</p>
+                        <label className="text-xs font-bold text-slate-500 uppercase ml-1">Expertise & Interests</label>
+                        <p className="text-[11px] text-slate-500">List tags separated by commas to refine your search recommendations.</p>
                       </div>
                       <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">{interestsDraft.split(',').filter(Boolean).length} tags</span>
                     </div>
@@ -1055,7 +1134,7 @@ function DashboardPage() {
                       value={interestsDraft}
                       onChange={(e) => setInterestsDraft(e.target.value)}
                       className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-6 text-white text-sm focus:outline-none focus:border-brand transition-all resize-none font-medium leading-relaxed"
-                      rows={5}
+                      rows={3}
                       placeholder="e.g. distributed systems, UI/UX, behavioral psychology, rust lang"
                     />
                   </div>
@@ -1066,7 +1145,7 @@ function DashboardPage() {
                       disabled={isSavingInterests}
                       className="btn btn-primary h-14 px-12 text-base font-bold shadow-xl shadow-brand/20"
                     >
-                      {isSavingInterests ? "Saving Configuration..." : "Save Profile Preferences"}
+                      {isSavingInterests ? "Saving Configuration..." : "Save Profile Details"}
                     </button>
                   </div>
                 </form>

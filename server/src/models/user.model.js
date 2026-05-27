@@ -37,6 +37,26 @@ const userSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    description: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    education: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    certification: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    experience: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     walletBalance: {
       type: Number,
       default: 0,
