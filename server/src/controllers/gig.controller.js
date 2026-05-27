@@ -61,6 +61,7 @@ const getAllGigs = async (req, res) => {
       filters.$or = [
         { title: { $regex: search, $options: 'i' } },
         { description: { $regex: search, $options: 'i' } },
+        { tags: { $regex: search, $options: 'i' } },
       ];
     }
 

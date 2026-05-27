@@ -160,6 +160,7 @@ function GigsPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [bookingTimes, setBookingTimes] = useState({});
+  const [searchQuery, setSearchQuery] = useState("");
   const [creatingGig, setCreatingGig] = useState(false);
   const [deletingGigId, setDeletingGigId] = useState(null);
   const [gigForm, setGigForm] = useState({
@@ -208,11 +209,15 @@ function GigsPage() {
   const isTeacher = roles.includes("instructor") || roles.includes("admin");
   const isStudent = roles.includes("student") || roles.includes("admin");
 
-  const fetchGigs = useCallback(async () => {
+  const fetchGigs = useCallback(async (query = "") => {
     setIsLoading(true);
     setError("");
     try {
-      const { data } = await api.get("/gigs");
+      const params = {};
+      if (query.trim()) {
+        params.search = query.trim();
+      }
+      const { data } = await api.get("/gigs", { params });
       setGigs(Array.isArray(data.gigs) ? data.gigs : []);
     } catch (requestError) {
       setError(requestError.response?.data?.message || "Failed to load gigs.");
@@ -237,9 +242,16 @@ function GigsPage() {
   }, []);
 
   useEffect(() => {
-    fetchGigs();
+    const delayDebounceFn = setTimeout(() => {
+      fetchGigs(searchQuery);
+    }, 300);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery, fetchGigs]);
+
+  useEffect(() => {
     fetchRecommendedGigs();
-  }, [fetchGigs, fetchRecommendedGigs]);
+  }, [fetchRecommendedGigs]);
 
   const onGigInputChange = (event) => {
     const { name, value } = event.target;
@@ -329,7 +341,6 @@ function GigsPage() {
       });
       setNotice("Reservation confirmed. Tokens held in escrow.");
       setBookingTimes((prev) => ({ ...prev, [gigId]: "" }));
-      // Reload user data for balance updates
       const { data } = await api.get("/auth/me");
       setUser(data.user);
       localStorage.setItem("user", JSON.stringify(data.user));
@@ -341,7 +352,6 @@ function GigsPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-12">
-      {/* Header Section */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-8 pb-8 border-b border-white/5">
         <div className="space-y-4">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand/10 border border-brand/20 text-brand-light text-[10px] font-bold uppercase tracking-widest">
@@ -358,17 +368,26 @@ function GigsPage() {
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
             <input 
               type="text" 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  fetchGigs(searchQuery);
+                }
+              }}
               placeholder="Search skills, tutors..." 
               className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-sm text-white focus:outline-none focus:border-brand transition-all"
             />
           </div>
-          <button className="btn btn-secondary h-[46px] px-4">
-            <Filter className="w-4 h-4" />
+          <button 
+            onClick={() => fetchGigs(searchQuery)}
+            className="btn btn-primary h-[46px] px-5 text-xs font-bold shadow-lg shadow-brand/20 flex items-center gap-2"
+          >
+            Search
           </button>
         </div>
       </div>
 
-      {/* Global Notifications */}
       <AnimatePresence>
         {(error || notice) && (
           <motion.div 
@@ -389,9 +408,7 @@ function GigsPage() {
       </AnimatePresence>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
-        {/* Sidebar / Forms */}
         <aside className="lg:col-span-4 space-y-8 sticky top-28">
-          {/* Create Gig Section (Instructors Only) */}
           {isTeacher ? (
             <div className="lms-card p-8 space-y-8">
               <div className="flex items-center gap-3">
@@ -494,9 +511,7 @@ function GigsPage() {
           </div>
         </aside>
 
-        {/* Main Gigs Feed */}
         <div className="lg:col-span-8 space-y-16">
-          {/* Recommendations */}
           {!isLoading && recommendedGigs.length > 0 && (
             <section className="space-y-8">
               <div className="flex items-center justify-between">
@@ -528,7 +543,6 @@ function GigsPage() {
             </section>
           )}
 
-          {/* All Sessions */}
           <section className="space-y-8">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
