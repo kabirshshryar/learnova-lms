@@ -1,6 +1,6 @@
 import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { BookOpen, User as UserIcon, LayoutDashboard, Search, Bell, Menu, X } from "lucide-react";
+import { BookOpen, User as UserIcon, LayoutDashboard, Search, Bell, Menu, X, Sun, Moon } from "lucide-react";
 import { useState, useEffect } from "react";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
@@ -24,6 +24,26 @@ const NavLink = ({ to, children, icon: Icon, active }) => (
 function App() {
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem("theme") || "dark";
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    if (theme === "light") {
+      document.documentElement.classList.add("light");
+      document.documentElement.classList.remove("dark");
+    } else {
+      document.documentElement.classList.add("dark");
+      document.documentElement.classList.remove("light");
+    }
+    localStorage.setItem("theme", theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => (prev === "dark" ? "light" : "dark"));
+  };
+
   const token = localStorage.getItem("token");
   const user = (() => {
     try {
@@ -33,14 +53,12 @@ function App() {
     }
   })();
 
-  // Close mobile menu on route change
   useEffect(() => {
     setIsMenuOpen(false);
   }, [location.pathname]);
 
   return (
     <div className="min-h-screen bg-dark-bg text-slate-200 font-inter selection:bg-brand/30">
-      {/* Professional Header */}
       <header className="sticky top-0 z-50 bg-dark-bg/80 backdrop-blur-md border-b border-white/5 px-4 lg:px-8 py-3">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <Link to="/" className="flex items-center gap-3 group shrink-0">
@@ -53,17 +71,24 @@ function App() {
             </div>
           </Link>
 
-          {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-1">
             <NavLink to="/" active={location.pathname === "/"}>Home</NavLink>
             <NavLink to="/gigs" active={location.pathname === "/gigs"} icon={Search}>Explore</NavLink>
-            {/* {token && (
-              <NavLink to="/dashboard" active={location.pathname === "/dashboard"} icon={LayoutDashboard}>Dashboard</NavLink>
-            )} */}
           </nav>
-
-          {/* User Actions */}
           <div className="flex items-center gap-3">
+            <button 
+              onClick={toggleTheme}
+              className="p-2 text-slate-400 hover:text-white transition-colors rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center cursor-pointer shrink-0"
+              title={theme === "light" ? "Switch to Dark Mode" : "Switch to Light Mode (Projector)"}
+              aria-label="Toggle Theme"
+            >
+              {theme === "light" ? (
+                <Moon className="w-4 h-4 text-brand-light" />
+              ) : (
+                <Sun className="w-4 h-4 text-brand-light" />
+              )}
+            </button>
+
             {token ? (
               <div className="flex items-center gap-2 lg:gap-4 pl-4 border-l border-white/10">
                 <button className="hidden sm:flex p-2 text-slate-400 hover:text-white transition-colors">
@@ -85,8 +110,6 @@ function App() {
                 <Link to="/register" className="btn btn-primary h-10">Sign Up</Link>
               </div>
             )}
-            
-            {/* Mobile Menu Toggle */}
             <button 
               className="md:hidden p-2 text-slate-400 hover:text-white transition-colors"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -95,8 +118,6 @@ function App() {
             </button>
           </div>
         </div>
-
-        {/* Mobile Navigation */}
         <AnimatePresence>
           {isMenuOpen && (
             <motion.div 
@@ -118,8 +139,6 @@ function App() {
           )}
         </AnimatePresence>
       </header>
-
-      {/* Main Content with Route Transitions */}
       <main className="max-w-7xl mx-auto px-4 lg:px-8 py-8 lg:py-12 min-h-[calc(100vh-140px)]">
         <AnimatePresence mode="wait">
           <Routes location={location} key={location.pathname}>
@@ -135,8 +154,6 @@ function App() {
           </Routes>
         </AnimatePresence>
       </main>
-
-      {/* Simple Professional Footer */}
       <footer className="border-t border-white/5 py-12 px-8">
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12 text-sm">
           <div className="space-y-4">
