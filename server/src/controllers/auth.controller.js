@@ -43,6 +43,9 @@ const register = async (req, res) => {
       walletBalance: 0,
     });
 
+    user.isOnline = true;
+    await user.save();
+
     const token = generateToken(user._id);
 
     return res.status(201).json({
@@ -91,6 +94,9 @@ const login = async (req, res) => {
       return res.status(401).json({ message: 'Invalid email or password.' });
     }
 
+    user.isOnline = true;
+    await user.save();
+
     const token = generateToken(user._id);
 
     return res.status(200).json({
@@ -118,6 +124,11 @@ const getMe = async (req, res) => {
 
     if (!user) {
       return res.status(404).json({ message: 'User not found.' });
+    }
+
+    if (!user.isOnline) {
+      user.isOnline = true;
+      await user.save();
     }
 
     const payload = user.toObject();

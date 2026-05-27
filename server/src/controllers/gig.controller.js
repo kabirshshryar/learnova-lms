@@ -128,7 +128,7 @@ const getAllGigs = async (req, res) => {
         .sort({ [safeSortBy]: sortDirection })
         .skip(skip)
         .limit(safeLimit)
-        .populate('teacher_id', 'name email roles rating description education certification experience')
+        .populate('teacher_id', 'name email roles rating description education certification experience isOnline')
         .lean(),
       Gig.countDocuments(filters),
     ]);
@@ -155,7 +155,7 @@ const getGigById = async (req, res) => {
 
     const gig = await Gig.findById(id).populate(
       'teacher_id',
-      'name email roles rating description education certification experience'
+      'name email roles rating description education certification experience isOnline'
     );
 
     if (!gig) {
@@ -222,7 +222,7 @@ const getRecommendedGigs = async (req, res) => {
     const candidateGigs = await Gig.find(matchFilter)
       .sort({ rating: -1, createdAt: -1 })
       .limit(60)
-      .populate('teacher_id', 'name email rating description education certification experience')
+      .populate('teacher_id', 'name email rating description education certification experience isOnline')
       .lean();
 
     const scored = candidateGigs

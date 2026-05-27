@@ -73,6 +73,10 @@ const userSchema = new mongoose.Schema(
       min: [0, 'Rating cannot be less than 0'],
       max: [5, 'Rating cannot be greater than 5'],
     },
+    isOnline: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,
