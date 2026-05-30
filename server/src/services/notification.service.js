@@ -117,6 +117,65 @@ const checkSessions = async () => {
         console.log(`Booking ${booking._id} auto-completed due to time over.`);
       }
     }
+
+    // --- 3. Unapproved Pending Expired Booking Cancellations ---
+    const expiredPendingBookings = await Booking.find({
+      status: 'pending',
+      time: { $lte: now }
+    })
+      .populate('student_id', 'name walletBalance')
+      .populate('teacher_id', 'name')
+      .populate('gig_id', 'title price');
+
+    for (const booking of expiredPendingBookings) {
+      try {
+        const student = await User.findById(booking.student_id._id);
+        if (student) {
+          const balanceBefore = student.walletBalance || 0;
+          student.walletBalance = balanceBefore + booking.escrowAmount;
+          await student.save();
+
+          // Create refund transaction
+          const Transaction = require('../models/transaction.model');
+          await Transaction.create({
+            user_id: booking.student_id._id,
+            operation: 'refund',
+            amount: booking.escrowAmount,
+            balanceBefore,
+            balanceAfter: student.walletBalance,
+            referenceType: 'booking',
+            referenceId: booking._id,
+            description: 'Escrow refunded automatically after tutor failed to approve before consultation time.',
+          });
+        }
+
+        booking.status = 'cancelled';
+        booking.escrowStatus = 'refunded';
+        await booking.save();
+
+        // Notify student
+        await sendNotification({
+          user_id: booking.student_id._id,
+          type: 'booking_cancelled',
+          title: 'Booking Cancelled Automatically',
+          message: `Your booking for "${booking.gig_id?.title || 'Specialized Session'}" was automatically cancelled and refunded because the tutor failed to approve it before the scheduled consultation time.`,
+          booking_id: booking._id,
+        });
+
+        // Notify teacher
+        await sendNotification({
+          user_id: booking.teacher_id._id,
+          type: 'booking_cancelled',
+          title: 'Booking Expired & Cancelled',
+          message: `Your booking for "${booking.gig_id?.title || 'Specialized Session'}" with student ${booking.student_id?.name || 'learner'} has expired and was cancelled automatically because it was not approved in time.`,
+          booking_id: booking._id,
+        });
+
+        console.log(`Booking ${booking._id} expired and was automatically cancelled/refunded.`);
+      } catch (err) {
+        console.error(`Error auto-cancelling expired pending booking ${booking._id}:`, err);
+      }
+    }
   } catch (err) {
     console.error('Session checker service error:', err);
   }

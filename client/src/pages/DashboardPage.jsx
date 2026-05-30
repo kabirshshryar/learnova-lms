@@ -1112,13 +1112,19 @@ function DashboardPage() {
                           )}
                           
                           {isTeacher && booking.status === 'pending' && String(booking.teacher_id?._id || booking.teacher_id) === myUserId && (
-                            <div className="flex gap-2 flex-1 md:flex-initial">
-                              <button 
-                                onClick={() => updateBookingStatus(booking._id, 'confirmed')}
-                                className="btn btn-primary h-12 flex-1 px-4 bg-success border-success-dark"
-                              >
-                                Approve
-                              </button>
+                            <div className="flex gap-2 flex-1 md:flex-initial items-center">
+                              {new Date(booking.time) > new Date() ? (
+                                <button 
+                                  onClick={() => updateBookingStatus(booking._id, 'confirmed')}
+                                  className="btn btn-primary h-12 flex-1 px-4 bg-success border-success-dark"
+                                >
+                                  Approve
+                                </button>
+                              ) : (
+                                <span className="inline-flex items-center px-4 py-2.5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs font-bold uppercase tracking-wider">
+                                  Expired
+                                </span>
+                              )}
                               <button 
                                 onClick={() => updateBookingStatus(booking._id, 'cancelled')}
                                 className="btn btn-secondary h-12 flex-1 px-4 text-red-400 border-red-500/10"

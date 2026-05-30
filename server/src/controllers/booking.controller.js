@@ -230,6 +230,11 @@ const updateBookingStatus = async (req, res) => {
         throw new Error('ONLY_TEACHER_CAN_APPROVE');
       }
 
+      // Prevent manual approval of expired pending bookings
+      if (status === 'confirmed' && new Date(booking.time) <= new Date()) {
+        throw new Error('BOOKING_EXPIRED_CANNOT_APPROVE');
+      }
+
       const isAdmin = actorRoles.includes('admin');
       if (!isAdmin && !isOwnerTeacher) {
         throw new Error('NOT_BOOKING_OWNER');
@@ -390,6 +395,12 @@ const updateBookingStatus = async (req, res) => {
         message: 'Insufficient tokens in student wallet for confirmation.',
       });
     }
+    if (error.message === 'BOOKING_EXPIRED_CANNOT_APPROVE') {
+      return res.status(400).json({
+        message: 'This session has already expired because the scheduled consultation time has passed. It can no longer be approved.',
+      });
+    }
+
     if (error.message === 'INVALID_STATUS_TRANSITION') {
       return res.status(400).json({
         message:
