@@ -1,7 +1,25 @@
 import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { BookOpen, User as UserIcon, LayoutDashboard, Search, Bell, Menu, X, Sun, Moon } from "lucide-react";
+import { 
+  BookOpen, 
+  User as UserIcon, 
+  LayoutDashboard, 
+  Search, 
+  Bell, 
+  Menu, 
+  X, 
+  Sun, 
+  Moon, 
+  Sparkles, 
+  CheckCircle2, 
+  XCircle, 
+  Clock, 
+  Settings 
+} from "lucide-react";
 import { useState, useEffect } from "react";
+import api from "./api/axios";
+import { createSocketClient } from "./realtime/socket";
+import { getUserId } from "./utils/user";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -24,6 +42,76 @@ const NavLink = ({ to, children, icon: Icon, active }) => (
 function App() {
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+
+  const playNotificationSound = () => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+      osc.frequency.setValueAtTime(880.00, ctx.currentTime + 0.1); // A5
+      gain.gain.setValueAtTime(0.04, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.35);
+    } catch (e) {
+      console.warn("AudioContext playback failed", e);
+    }
+  };
+
+  const formatTimeAgo = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    if (diffMs < 0) return "Just now";
+    const diffMins = Math.floor(diffMs / (60 * 1000));
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 30) return `${diffDays}d ago`;
+    const diffMonths = Math.floor(diffDays / 30);
+    return `${diffMonths}mo ago`;
+  };
+
+  const loadNotifications = async () => {
+    try {
+      const { data } = await api.get("/notifications");
+      setNotifications(Array.isArray(data.notifications) ? data.notifications : []);
+    } catch (e) {
+      console.error("Failed to load notifications", e);
+    }
+  };
+
+  const markNotificationAsRead = async (id) => {
+    try {
+      await api.patch(`/notifications/${id}/read`);
+      setNotifications((prev) =>
+        prev.map((n) => (n._id === id ? { ...n, isRead: true } : n))
+      );
+    } catch (err) {
+      console.error("Failed to mark notification as read", err);
+    }
+  };
+
+  const markAllNotificationsAsRead = async () => {
+    try {
+      await api.patch("/notifications/read-all");
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    } catch (err) {
+      console.error("Failed to mark all as read", err);
+    }
+  };
+
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem("theme") || "dark";
   });
@@ -52,6 +140,32 @@ function App() {
       return null;
     }
   })();
+
+  useEffect(() => {
+    if (!token || !user) return undefined;
+    
+    loadNotifications();
+
+    const myUserId = getUserId(user);
+    if (!myUserId) return undefined;
+
+    const socket = createSocketClient();
+    socket.emit("join:room", `user:${myUserId}`);
+    
+    const handleNewNotif = (newNotif) => {
+      setNotifications(prev => [newNotif, ...prev]);
+      if (soundEnabled) {
+        playNotificationSound();
+      }
+    };
+    
+    socket.on("notification:new", handleNewNotif);
+
+    return () => {
+      socket.off("notification:new", handleNewNotif);
+      socket.disconnect();
+    };
+  }, [token]);
 
   useEffect(() => {
     setIsMenuOpen(false);
@@ -91,9 +205,134 @@ function App() {
 
             {token ? (
               <div className="flex items-center gap-2 lg:gap-4 pl-4 border-l border-white/10">
-                <button className="hidden sm:flex p-2 text-slate-400 hover:text-white transition-colors">
-                  <Bell className="w-5 h-5" />
-                </button>
+                <div className="relative">
+                  <button 
+                    onClick={() => setShowNotifications(!showNotifications)}
+                    className={`p-2 hover:text-white transition-colors rounded-xl bg-white/5 hover:bg-white/10 border relative cursor-pointer flex items-center justify-center shrink-0 ${showNotifications ? 'text-white border-brand' : 'text-slate-400 border-white/10'}`}
+                  >
+                    <Bell className="w-5 h-5" />
+                    {notifications.filter(n => !n.isRead).length > 0 && (
+                      <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-accent rounded-full border border-dark-bg animate-pulse" />
+                    )}
+                  </button>
+
+                  <AnimatePresence>
+                    {showNotifications && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className="absolute right-[-60px] sm:right-0 mt-3 w-80 sm:w-96 bg-[#0f1422] border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden backdrop-blur-xl"
+                      >
+                        {/* Dropdown Header */}
+                        <div className="p-4 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
+                          <div className="flex items-center gap-2">
+                            <Bell className="w-4 h-4 text-brand-light animate-bounce" />
+                            <h4 className="font-bold text-white text-sm font-outfit">
+                              Notifications ({notifications.filter(n => !n.isRead).length})
+                            </h4>
+                          </div>
+                          <button 
+                            onClick={markAllNotificationsAsRead}
+                            className="text-[10px] text-brand-light hover:text-white font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                          >
+                            Mark all as read
+                          </button>
+                        </div>
+
+                        {/* Scrollable Notification List */}
+                        <div className="max-h-80 overflow-y-auto divide-y divide-white/5 scrollbar-thin scrollbar-thumb-white/10 pr-0.5">
+                          {notifications.length === 0 ? (
+                            <div className="p-12 text-center text-slate-500 text-xs italic flex flex-col items-center gap-3">
+                              <Bell className="w-8 h-8 opacity-20" />
+                              No activities yet.
+                            </div>
+                          ) : (
+                            notifications.map((notif) => {
+                              const isUnread = !notif.isRead;
+                              let iconBg = "bg-brand/10 border-brand/20 text-brand-light";
+                              let IconComponent = Bell;
+
+                              if (notif.type === 'rating_received') {
+                                iconBg = "bg-yellow-500/10 border-yellow-500/20 text-yellow-400";
+                                IconComponent = Sparkles;
+                              } else if (notif.type === 'booking_approved') {
+                                iconBg = "bg-success/10 border-success/20 text-success";
+                                IconComponent = CheckCircle2;
+                              } else if (notif.type === 'booking_cancelled') {
+                                iconBg = "bg-red-500/10 border-red-500/20 text-red-400";
+                                IconComponent = XCircle;
+                              } else if (notif.type === 'booking_reminder') {
+                                iconBg = "bg-blue-500/10 border-blue-500/20 text-blue-400";
+                                IconComponent = Clock;
+                              } else if (notif.type === 'booking_completed') {
+                                iconBg = "bg-indigo-500/10 border-indigo-500/20 text-indigo-400";
+                                IconComponent = BookOpen;
+                              }
+
+                              return (
+                                <div 
+                                  key={notif._id} 
+                                  onClick={() => markNotificationAsRead(notif._id)}
+                                  className={`p-4 flex gap-3.5 items-start hover:bg-white/[0.03] transition-all cursor-pointer ${isUnread ? 'bg-white/[0.01]' : 'opacity-70'}`}
+                                >
+                                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${iconBg}`}>
+                                    <IconComponent className="w-4 h-4" />
+                                  </div>
+                                  <div className="flex-1 min-w-0 space-y-0.5 text-left">
+                                    <p className={`text-xs text-slate-300 leading-normal ${isUnread ? 'font-semibold text-white' : 'font-medium'}`}>{notif.message}</p>
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{formatTimeAgo(notif.createdAt)}</p>
+                                  </div>
+                                  <div className="flex items-center justify-center shrink-0 pt-1">
+                                    {isUnread && (
+                                      <span className="w-2 h-2 bg-brand rounded-full" />
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+
+                        {/* Dropdown Footer Controls (Fiverr Style) */}
+                        <div className="p-3 bg-[#0a0d18] border-t border-white/5 flex justify-between items-center">
+                          <div className="flex items-center gap-1">
+                            {/* Sound toggler */}
+                            <button 
+                              onClick={() => setSoundEnabled(!soundEnabled)}
+                              title={soundEnabled ? "Mute notification sounds" : "Unmute notification sounds"}
+                              className={`p-1.5 rounded-lg hover:bg-white/5 transition-all cursor-pointer ${soundEnabled ? 'text-brand-light' : 'text-slate-500'}`}
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                {soundEnabled ? (
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                                ) : (
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zm12.364-5.636l-3.536 3.536m0-3.536l3.536 3.536" />
+                                )}
+                              </svg>
+                            </button>
+
+                            {/* Settings indicator */}
+                            <Link 
+                              to="/dashboard"
+                              onClick={() => {
+                                setShowNotifications(false);
+                              }}
+                              title="Notification Settings"
+                              className="p-1.5 rounded-lg hover:bg-white/5 text-slate-500 hover:text-white transition-all flex items-center justify-center"
+                            >
+                              <Settings className="w-3.5 h-3.5" />
+                            </Link>
+                          </div>
+                          
+                          <span className="text-[9px] text-slate-600 font-bold uppercase tracking-widest">
+                            Live Feed
+                          </span>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
                 <Link to="/dashboard" className="flex items-center gap-3 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 hover:border-white/20 transition-all">
                   <div className="hidden lg:block text-right">
                     <p className="text-xs font-bold text-white leading-none">{user?.name || "User"}</p>
