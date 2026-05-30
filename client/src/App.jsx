@@ -97,7 +97,11 @@ function App() {
                 <Link to="/dashboard" className="flex items-center gap-3 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 hover:border-white/20 transition-all">
                   <div className="hidden lg:block text-right">
                     <p className="text-xs font-bold text-white leading-none">{user?.name || "User"}</p>
-                    <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mt-1">Learner</p>
+                    <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mt-1">
+                      {Array.isArray(user?.roles) && user.roles.includes("admin") ? "Admin" :
+                       Array.isArray(user?.roles) && user.roles.includes("instructor") ? "Instructor" :
+                       "Learner"}
+                    </p>
                   </div>
                   <div className="w-7 h-7 rounded-full bg-brand/20 flex items-center justify-center border border-brand/30">
                     <UserIcon className="w-3.5 h-3.5 text-brand-light" />

@@ -1077,8 +1077,8 @@ function DashboardPage() {
                             </button>
                           )}
 
-                          {/* Tutor: Mark session completed when confirmed */}
-                          {String(booking.teacher_id?._id || booking.teacher_id) === String(myUserId) && booking.status === 'confirmed' && (
+                          {/* Tutor: Mark session completed when confirmed (only after session start time) */}
+                          {String(booking.teacher_id?._id || booking.teacher_id) === String(myUserId) && booking.status === 'confirmed' && new Date(booking.time) <= new Date() && (
                             <button
                               onClick={() => {
                                 if (!window.confirm('Mark this session as completed?')) return;
