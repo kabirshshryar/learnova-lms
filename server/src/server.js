@@ -49,4 +49,5 @@ startServer();
 
 // Initialize scheduled tasks
 require('./services/weekly-token.service');
+require('./services/notification.service');
 

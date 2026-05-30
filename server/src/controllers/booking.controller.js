@@ -3,6 +3,9 @@ const Booking = require('../models/booking.model');
 const Gig = require('../models/gig.model');
 const User = require('../models/user.model');
 const Transaction = require('../models/transaction.model');
+const Notification = require('../models/notification.model');
+const Review = require('../models/review.model');
+const { sendNotification } = require('../services/notification.service');
 const { getIO } = require('../utils/socket');
 
 const createBooking = async (req, res) => {
@@ -130,6 +133,18 @@ const createBooking = async (req, res) => {
       .populate('student_id', 'name email')
       .populate('teacher_id', 'name email')
       .populate('gig_id', 'title description duration price');
+
+    // Notify the teacher about the new booking
+    if (populatedBooking) {
+      await sendNotification({
+        user_id: populatedBooking.teacher_id._id,
+        sender_id: populatedBooking.student_id._id,
+        type: 'booking_created',
+        title: 'New Session Booked',
+        message: `${populatedBooking.student_id.name} booked a session for "${populatedBooking.gig_id?.title}" at ${new Date(populatedBooking.time).toLocaleString()}.`,
+        booking_id: populatedBooking._id,
+      });
+    }
 
     const io = getIO();
     if (io && populatedBooking) {
@@ -276,6 +291,51 @@ const updateBookingStatus = async (req, res) => {
       .populate('teacher_id', 'name email')
       .populate('gig_id', 'title price');
 
+    // Trigger persistent notifications for status transitions
+    if (updatedBooking) {
+      if (status === 'confirmed') {
+        await sendNotification({
+          user_id: updatedBooking.student_id._id,
+          sender_id: req.user.id,
+          type: 'booking_approved',
+          title: 'Session Approved',
+          message: `Your session for "${updatedBooking.gig_id?.title || 'Specialized Session'}" has been approved by ${updatedBooking.teacher_id.name}! Meeting link: ${updatedBooking.meetingLink || 'standard room'}.`,
+          booking_id: updatedBooking._id,
+        });
+      } else if (status === 'cancelled') {
+        const isTeacher = req.user.id === updatedBooking.teacher_id._id.toString();
+        const recipientId = isTeacher ? updatedBooking.student_id._id : updatedBooking.teacher_id._id;
+        const actorName = isTeacher ? updatedBooking.teacher_id.name : updatedBooking.student_id.name;
+
+        await sendNotification({
+          user_id: recipientId,
+          sender_id: req.user.id,
+          type: 'booking_cancelled',
+          title: 'Session Cancelled',
+          message: `Your session for "${updatedBooking.gig_id?.title || 'Specialized Session'}" has been cancelled by ${actorName}.`,
+          booking_id: updatedBooking._id,
+        });
+      } else if (status === 'completed') {
+        await sendNotification({
+          user_id: updatedBooking.student_id._id,
+          sender_id: req.user.id,
+          type: 'booking_completed',
+          title: 'Session Completed',
+          message: `Your session "${updatedBooking.gig_id?.title || 'Specialized Session'}" with ${updatedBooking.teacher_id.name} is complete. Please share your rating and review!`,
+          booking_id: updatedBooking._id,
+        });
+
+        await sendNotification({
+          user_id: updatedBooking.teacher_id._id,
+          sender_id: req.user.id,
+          type: 'booking_completed',
+          title: 'Session Completed',
+          message: `Your teaching session "${updatedBooking.gig_id?.title || 'Specialized Session'}" with ${updatedBooking.student_id.name} is complete. Payout is pending admin approval.`,
+          booking_id: updatedBooking._id,
+        });
+      }
+    }
+
     const io = getIO();
     if (io) {
       io.to(`user:${updatedBooking.student_id._id.toString()}`).emit(
@@ -409,9 +469,92 @@ const getChatHistory = async (req, res) => {
   }
 };
 
+const createReview = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rating, reviewText } = req.body;
+
+    if (!rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ message: 'Rating must be between 1 and 5.' });
+    }
+
+    const booking = await Booking.findById(id);
+    if (!booking) {
+      return res.status(404).json({ message: 'Booking not found.' });
+    }
+
+    if (booking.student_id.toString() !== req.user.id) {
+      return res.status(403).json({
+        message: 'Only the student who made the booking can leave a review.',
+      });
+    }
+
+    if (booking.status !== 'completed') {
+      return res.status(400).json({
+        message: 'You can only leave a review for completed sessions.',
+      });
+    }
+
+    const existingReview = await Review.findOne({ booking_id: id });
+    if (existingReview) {
+      return res.status(400).json({
+        message: 'You have already reviewed this session.',
+      });
+    }
+
+    const review = await Review.create({
+      booking_id: id,
+      student_id: req.user.id,
+      teacher_id: booking.teacher_id,
+      gig_id: booking.gig_id,
+      rating,
+      reviewText,
+    });
+
+    // Update Gig average rating
+    const gigReviews = await Review.find({ gig_id: booking.gig_id });
+    const avgGigRating =
+      gigReviews.reduce((sum, r) => sum + r.rating, 0) / gigReviews.length;
+    await Gig.findByIdAndUpdate(booking.gig_id, {
+      rating: Number(avgGigRating.toFixed(1)),
+    });
+
+    // Update Teacher average rating
+    const teacherReviews = await Review.find({ teacher_id: booking.teacher_id });
+    const avgTeacherRating =
+      teacherReviews.reduce((sum, r) => sum + r.rating, 0) /
+      teacherReviews.length;
+    await User.findByIdAndUpdate(booking.teacher_id, {
+      rating: Number(avgTeacherRating.toFixed(1)),
+    });
+
+    // Fetch student's name for the notification
+    const studentUser = await User.findById(req.user.id).select('name');
+
+    // Notify the teacher about the new review/rating
+    await sendNotification({
+      user_id: booking.teacher_id,
+      sender_id: req.user.id,
+      type: 'rating_received',
+      title: 'New Review Received',
+      message: `${studentUser.name} left a ${rating} star review for your session.`,
+      booking_id: booking._id,
+      rating,
+    });
+
+    return res.status(201).json({
+      message: 'Review submitted successfully.',
+      review,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   createBooking,
   updateBookingStatus,
   getMyBookings,
   getChatHistory,
+  createReview,
 };

@@ -146,6 +146,13 @@ function DashboardPage() {
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
   const [notifications, setNotifications] = useState([]);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const [reviewingBooking, setReviewingBooking] = useState(null);
+  const [reviewedBookings, setReviewedBookings] = useState([]);
   const [chatMessages, setChatMessages] = useState({});
   const [chatInputs, setChatInputs] = useState({});
   const [updatingBookingId, setUpdatingBookingId] = useState(null);
@@ -405,6 +412,92 @@ function DashboardPage() {
     }
   }, [isAdmin]);
 
+  const playNotificationSound = useCallback(() => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+      osc.frequency.setValueAtTime(880.00, ctx.currentTime + 0.1); // A5
+      gain.gain.setValueAtTime(0.04, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.35);
+    } catch (e) {
+      console.warn("AudioContext playback failed", e);
+    }
+  }, []);
+
+  const formatTimeAgo = useCallback((dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    if (diffMs < 0) return "Just now";
+    const diffMins = Math.floor(diffMs / (60 * 1000));
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 30) return `${diffDays}d ago`;
+    const diffMonths = Math.floor(diffDays / 30);
+    return `${diffMonths}mo ago`;
+  }, []);
+
+  const loadNotifications = useCallback(async () => {
+    try {
+      const { data } = await api.get("/notifications");
+      setNotifications(Array.isArray(data.notifications) ? data.notifications : []);
+    } catch (e) {
+      console.error("Failed to load notifications", e);
+    }
+  }, []);
+
+  const markNotificationAsRead = useCallback(async (id) => {
+    try {
+      await api.patch(`/notifications/${id}/read`);
+      setNotifications((prev) =>
+        prev.map((n) => (n._id === id ? { ...n, isRead: true } : n))
+      );
+    } catch (err) {
+      console.error("Failed to mark notification as read", err);
+    }
+  }, []);
+
+  const markAllNotificationsAsRead = useCallback(async () => {
+    try {
+      await api.patch("/notifications/read-all");
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      setFeedback("All notifications marked as read.");
+    } catch (err) {
+      console.error("Failed to mark all as read", err);
+    }
+  }, []);
+
+  const submitReview = async (e) => {
+    e.preventDefault();
+    if (!reviewingBooking) return;
+    try {
+      await api.post(`/bookings/${reviewingBooking._id}/review`, {
+        rating: reviewRating,
+        reviewText: reviewComment,
+      });
+      setFeedback("Thank you for your rating! Review submitted successfully.");
+      setReviewedBookings((prev) => [...prev, reviewingBooking._id]);
+      setReviewModalOpen(false);
+      setReviewComment("");
+      setReviewRating(5);
+      setReviewingBooking(null);
+      loadBookings();
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to submit review.");
+    }
+  };
+
   useEffect(() => {
     const init = async () => {
       setError("");
@@ -433,7 +526,8 @@ function DashboardPage() {
     loadTransactions();
     loadMyWithdrawals();
     loadPendingWithdrawals();
-  }, [user, loadBookings, loadTransactions, loadMyWithdrawals, loadPendingWithdrawals]);
+    loadNotifications();
+  }, [user, loadBookings, loadTransactions, loadMyWithdrawals, loadPendingWithdrawals, loadNotifications]);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -442,16 +536,25 @@ function DashboardPage() {
     const socket = createSocketClient(token);
     socketRef.current = socket;
 
-    socket.on("booking:created", (payload) => {
-      addNotification(payload.message);
+    socket.on("notification:new", (payload) => {
+      if (soundEnabled) {
+        playNotificationSound();
+      }
+      setNotifications((prev) => [payload, ...prev]);
       loadBookings();
       loadTransactions();
     });
 
-    socket.on("booking:status_updated", (payload) => {
-      addNotification(payload.message);
+    socket.on("booking:created", (payload) => {
       loadBookings();
       loadTransactions();
+      loadNotifications();
+    });
+
+    socket.on("booking:status_updated", (payload) => {
+      loadBookings();
+      loadTransactions();
+      loadNotifications();
     });
 
     socket.on("chat:new_message", (payload) => {
@@ -462,7 +565,7 @@ function DashboardPage() {
     });
 
     return () => socket.disconnect();
-  }, [loadBookings, loadTransactions]);
+  }, [loadBookings, loadTransactions, loadNotifications, soundEnabled, playNotificationSound]);
 
   useEffect(() => {
     if (!updatingBookingId) return;
@@ -495,7 +598,7 @@ function DashboardPage() {
 
   const addNotification = (text) => {
     setNotifications((prev) => [
-      { id: Date.now(), text },
+      { id: Date.now(), title: "Update", message: text, createdAt: new Date() },
       ...prev.slice(0, 4),
     ]);
   };
@@ -650,10 +753,149 @@ function DashboardPage() {
               <Wallet className="w-3.5 h-3.5 text-brand-light" />
               <span className="text-sm font-bold text-white">{user?.walletBalance ?? 0} <span className="text-[10px] text-brand-light uppercase ml-0.5">TKN</span></span>
             </div>
-            <button className="p-2.5 text-slate-400 hover:text-white bg-white/5 border border-white/10 rounded-xl transition-all relative">
-              <Bell className="w-4 h-4" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-accent rounded-full border-2 border-[#0b0f19]" />
-            </button>
+            
+            {/* Fiverr-Style Notification Panel */}
+            <div className="relative">
+              <button 
+                onClick={() => setShowNotifications(!showNotifications)}
+                className={`p-2.5 hover:text-white bg-white/5 border rounded-xl transition-all relative ${showNotifications ? 'text-white border-brand shadow-lg shadow-brand/10' : 'text-slate-400 border-white/10'}`}
+              >
+                <Bell className="w-4 h-4" />
+                {notifications.filter(n => !n.isRead).length > 0 && (
+                  <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-accent rounded-full border-2 border-[#0b0f19] animate-pulse" />
+                )}
+              </button>
+
+              <AnimatePresence>
+                {showNotifications && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="absolute right-0 mt-3 w-80 sm:w-96 bg-[#0f1422] border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden backdrop-blur-xl"
+                  >
+                    {/* Dropdown Header */}
+                    <div className="p-4 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
+                      <div className="flex items-center gap-2">
+                        <Bell className="w-4 h-4 text-brand-light" />
+                        <h4 className="font-bold text-white text-sm font-outfit">
+                          Notifications ({notifications.filter(n => !n.isRead).length})
+                        </h4>
+                      </div>
+                      <button 
+                        onClick={markAllNotificationsAsRead}
+                        className="text-[10px] text-brand-light hover:text-white font-bold uppercase tracking-wider transition-colors"
+                      >
+                        Mark all as read
+                      </button>
+                    </div>
+
+                    {/* Scrollable Notification List */}
+                    <div className="max-h-80 overflow-y-auto divide-y divide-white/5 scrollbar-thin scrollbar-thumb-white/10 pr-0.5">
+                      {notifications.length === 0 ? (
+                        <div className="p-12 text-center text-slate-500 text-xs italic flex flex-col items-center gap-3">
+                          <Bell className="w-8 h-8 opacity-20" />
+                          No activities yet.
+                        </div>
+                      ) : (
+                        notifications.map((notif) => {
+                          const isUnread = !notif.isRead;
+                          let iconBg = "bg-brand/10 border-brand/20 text-brand-light";
+                          let IconComponent = Bell;
+
+                          if (notif.type === 'rating_received') {
+                            iconBg = "bg-yellow-500/10 border-yellow-500/20 text-yellow-400";
+                            IconComponent = Sparkles;
+                          } else if (notif.type === 'booking_approved') {
+                            iconBg = "bg-success/10 border-success/20 text-success";
+                            IconComponent = CheckCircle2;
+                          } else if (notif.type === 'booking_cancelled') {
+                            iconBg = "bg-red-500/10 border-red-500/20 text-red-400";
+                            IconComponent = XCircle;
+                          } else if (notif.type === 'booking_reminder') {
+                            iconBg = "bg-blue-500/10 border-blue-500/20 text-blue-400";
+                            IconComponent = Clock;
+                          } else if (notif.type === 'booking_completed') {
+                            iconBg = "bg-indigo-500/10 border-indigo-500/20 text-indigo-400";
+                            IconComponent = BookOpen;
+                          }
+
+                          return (
+                            <div 
+                              key={notif._id || notif.id} 
+                              onClick={() => {
+                                if (isUnread) markNotificationAsRead(notif._id || notif.id);
+                              }}
+                              className={`p-4 flex gap-3.5 hover:bg-white/[0.02] cursor-pointer transition-all ${
+                                isUnread ? 'bg-brand/5 border-l-2 border-brand' : ''
+                              }`}
+                            >
+                              {/* Left Icon Avatar */}
+                              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 border ${iconBg}`}>
+                                <IconComponent className="w-4 h-4" />
+                              </div>
+
+                              {/* Notification Text details */}
+                              <div className="flex-1 min-w-0 space-y-1">
+                                <p className="text-xs text-slate-300 leading-normal font-medium">
+                                  {notif.message}
+                                </p>
+                                <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
+                                  {formatTimeAgo(notif.createdAt)}
+                                </p>
+                              </div>
+
+                              {/* Right Unread Indicator */}
+                              <div className="flex items-center shrink-0">
+                                {isUnread && (
+                                  <span className="w-2 h-2 bg-brand rounded-full" />
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+
+                    {/* Dropdown Footer Controls (Fiverr Style) */}
+                    <div className="p-3 bg-[#0a0d18] border-t border-white/5 flex justify-between items-center">
+                      <div className="flex items-center gap-1">
+                        {/* Sound toggler */}
+                        <button 
+                          onClick={() => setSoundEnabled(!soundEnabled)}
+                          title={soundEnabled ? "Mute notification sounds" : "Unmute notification sounds"}
+                          className={`p-1.5 rounded-lg hover:bg-white/5 transition-all ${soundEnabled ? 'text-brand-light' : 'text-slate-500'}`}
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            {soundEnabled ? (
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                            ) : (
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zm12.364-5.636l-3.536 3.536m0-3.536l3.536 3.536" />
+                            )}
+                          </svg>
+                        </button>
+
+                        {/* Settings indicator */}
+                        <button 
+                          onClick={() => {
+                            setShowNotifications(false);
+                            setActiveTab("profile");
+                          }}
+                          title="Notification Settings"
+                          className="p-1.5 rounded-lg hover:bg-white/5 text-slate-500 hover:text-white transition-all"
+                        >
+                          <Settings className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      
+                      <span className="text-[9px] text-slate-600 font-bold uppercase tracking-widest">
+                        Live Feed
+                      </span>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
 
@@ -846,6 +1088,27 @@ function DashboardPage() {
                             >
                               Mark Completed
                             </button>
+                          )}
+
+                          {/* Student: Leave Review when session is completed */}
+                          {booking.status === 'completed' && String(booking.student_id?._id || booking.student_id) === String(myUserId) && (
+                            reviewedBookings.includes(booking._id) ? (
+                              <div className="flex items-center gap-1.5 px-4 py-2.5 bg-success/15 border border-success/30 rounded-xl text-xs font-bold text-success">
+                                <CheckCircle2 className="w-3.5 h-3.5" /> Reviewed
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  setReviewingBooking(booking);
+                                  setReviewRating(5);
+                                  setReviewComment("");
+                                  setReviewModalOpen(true);
+                                }}
+                                className="btn h-12 px-6 bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/20 transition-all font-semibold flex items-center gap-2"
+                              >
+                                <Sparkles className="w-4 h-4" /> Leave Review
+                              </button>
+                            )
                           )}
                           
                           {isTeacher && booking.status === 'pending' && String(booking.teacher_id?._id || booking.teacher_id) === myUserId && (
@@ -1318,6 +1581,117 @@ function DashboardPage() {
           )}
         </div>
       </main>
+      {/* Dynamic Fiverr-style Rating & Review Modal */}
+      <AnimatePresence>
+        {reviewModalOpen && reviewingBooking && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setReviewModalOpen(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+
+            {/* Modal Body */}
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md bg-[#0f1422] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-10"
+            >
+              {/* Header */}
+              <div className="p-6 border-b border-white/5 bg-white/[0.01] flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-yellow-400" />
+                  <h3 className="font-bold text-white text-lg font-outfit">Leave a Review</h3>
+                </div>
+                <button 
+                  onClick={() => setReviewModalOpen(false)}
+                  className="p-1 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-colors"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Form */}
+              <form onSubmit={submitReview} className="p-6 space-y-6">
+                {/* Tutor Info */}
+                <div className="flex items-center gap-4 p-4 bg-white/[0.02] border border-white/5 rounded-xl">
+                  <div className="w-10 h-10 rounded-full bg-brand/10 border border-brand/20 flex items-center justify-center text-brand-light font-bold text-sm">
+                    {reviewingBooking.teacher_id?.name?.charAt(0) || "T"}
+                  </div>
+                  <div>
+                    <h4 className="text-xs text-slate-500 uppercase tracking-widest font-bold">Session Tutor</h4>
+                    <p className="text-sm font-bold text-white">{reviewingBooking.teacher_id?.name || "Verified Expert"}</p>
+                  </div>
+                </div>
+
+                {/* Rating selection (Stars) */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Your Rating</label>
+                  <div className="flex gap-2">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => setReviewRating(star)}
+                        className="p-1 transition-transform active:scale-95 hover:scale-110"
+                      >
+                        <Sparkles 
+                          className={`w-8 h-8 ${
+                            star <= reviewRating 
+                            ? 'text-yellow-400 fill-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.2)]' 
+                            : 'text-slate-600'
+                          }`} 
+                        />
+                      </button>
+                    ))}
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-medium">
+                    {reviewRating === 5 ? "Outstanding! 5 out of 5 stars" :
+                     reviewRating === 4 ? "Very Good! 4 out of 5 stars" :
+                     reviewRating === 3 ? "Good! 3 out of 5 stars" :
+                     reviewRating === 2 ? "Below Average! 2 out of 5 stars" :
+                     "Poor! 1 out of 5 stars"}
+                  </span>
+                </div>
+
+                {/* Feedback Comment input */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Your Feedback</label>
+                  <textarea
+                    required
+                    value={reviewComment}
+                    onChange={(e) => setReviewComment(e.target.value)}
+                    placeholder="Share your experience learning with this tutor. What was exceptionally helpful? How was their communication?"
+                    rows={4}
+                    className="w-full bg-[#070913] border border-white/10 focus:border-brand/40 rounded-xl px-4 py-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none transition-all resize-none"
+                  />
+                </div>
+
+                {/* Footer buttons */}
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setReviewModalOpen(false)}
+                    className="flex-1 btn btn-secondary h-12 text-slate-400 border-white/5 hover:bg-white/5 text-xs font-bold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 btn btn-primary h-12 bg-brand text-white border-brand hover:bg-brand-dark text-xs font-bold shadow-lg shadow-brand/20 flex items-center justify-center gap-2"
+                  >
+                    Submit Review <Sparkles className="w-4 h-4" />
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
