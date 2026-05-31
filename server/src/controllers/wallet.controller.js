@@ -1,5 +1,13 @@
 const User = require('../models/user.model');
 const Transaction = require('../models/transaction.model');
+const TokenPurchase = require('../models/token-purchase.model');
+
+const PACKAGES = {
+  50: 10,
+  100: 20,
+  200: 50,
+  500: 150
+};
 
 const getMyTransactions = async (req, res) => {
   try {
@@ -56,7 +64,62 @@ const topUpWallet = async (req, res) => {
   }
 };
 
+const createManualPurchase = async (req, res) => {
+  try {
+    const { bkashNumber, amountPaid, trxId } = req.body;
+
+    if (!bkashNumber || amountPaid === undefined || !trxId) {
+      return res.status(400).json({ message: 'bKash number, amount paid, and trxId are required.' });
+    }
+
+    const parsedAmount = Number(amountPaid);
+    if (!PACKAGES[parsedAmount]) {
+      return res.status(400).json({
+        message: `Invalid package amount. Valid amounts are BDT 50, 100, 200, or 500.`,
+      });
+    }
+
+    const tokens = PACKAGES[parsedAmount];
+
+    // Check if trxId already exists
+    const existing = await TokenPurchase.findOne({ trxId: trxId.trim() });
+    if (existing) {
+      return res.status(400).json({ message: 'This transaction ID (trxId) has already been submitted.' });
+    }
+
+    const purchase = await TokenPurchase.create({
+      user_id: req.user.id,
+      bkashNumber: bkashNumber.trim(),
+      amountPaid: parsedAmount,
+      tokens: tokens,
+      trxId: trxId.trim(),
+      status: 'pending',
+    });
+
+    return res.status(201).json({
+      message: 'Your token purchase request has been submitted successfully. Waiting for admin approval.',
+      purchase,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+const getMyManualPurchases = async (req, res) => {
+  try {
+    const purchases = await TokenPurchase.find({ user_id: req.user.id })
+      .sort({ createdAt: -1 })
+      .lean();
+    return res.status(200).json({ purchases });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   topUpWallet,
   getMyTransactions,
+  createManualPurchase,
+  getMyManualPurchases,
 };
+

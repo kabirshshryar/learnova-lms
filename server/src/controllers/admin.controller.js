@@ -2,6 +2,7 @@ const User = require('../models/user.model');
 const Booking = require('../models/booking.model');
 const Transaction = require('../models/transaction.model');
 const Review = require('../models/review.model');
+const TokenPurchase = require('../models/token-purchase.model');
 const { getIO } = require('../utils/socket');
 const mongoose = require('mongoose');
 
@@ -140,3 +141,93 @@ exports.listAllReviews = async (req, res) => {
     res.status(500).json({ message: e.message });
   }
 };
+
+exports.listTokenPurchases = async (req, res) => {
+  try {
+    const purchases = await TokenPurchase.find()
+      .populate('user_id', 'name email walletBalance')
+      .populate('processedBy', 'name email')
+      .sort({ createdAt: -1 });
+    res.json({ purchases });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+};
+
+exports.approveTokenPurchase = async (req, res) => {
+  const { id } = req.params;
+  const session = await mongoose.startSession();
+
+  try {
+    await session.withTransaction(async () => {
+      const purchase = await TokenPurchase.findById(id).session(session);
+      if (!purchase) throw new Error('PURCHASE_REQUEST_NOT_FOUND');
+      if (purchase.status !== 'pending') {
+        throw new Error('PURCHASE_REQUEST_NOT_PENDING');
+      }
+
+      const user = await User.findById(purchase.user_id)
+        .select('walletBalance')
+        .session(session);
+
+      if (!user) throw new Error('USER_NOT_FOUND');
+
+      const balanceBefore = User.walletAmount(user);
+      user.walletBalance = balanceBefore + purchase.tokens;
+      await user.save({ session });
+
+      purchase.status = 'approved';
+      purchase.processedBy = req.user.id;
+      purchase.processedAt = new Date();
+      await purchase.save({ session });
+
+      await Transaction.create(
+        [
+          {
+            user_id: purchase.user_id,
+            operation: 'topup',
+            amount: purchase.tokens,
+            balanceBefore: balanceBefore,
+            balanceAfter: user.walletBalance,
+            referenceType: 'wallet_topup',
+            referenceId: purchase._id,
+            description: `bKash manual token top-up approved by admin. (TrxID: ${purchase.trxId})`,
+          },
+        ],
+        { session }
+      );
+    });
+
+    res.json({ message: 'Token purchase approved and tokens transferred successfully.' });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  } finally {
+    await session.endSession();
+  }
+};
+
+exports.rejectTokenPurchase = async (req, res) => {
+  const { id } = req.params;
+  const { note } = req.body;
+
+  try {
+    const purchase = await TokenPurchase.findById(id);
+    if (!purchase) {
+      return res.status(404).json({ message: 'Token purchase request not found' });
+    }
+    if (purchase.status !== 'pending') {
+      return res.status(400).json({ message: 'Purchase request is not pending' });
+    }
+
+    purchase.status = 'rejected';
+    purchase.note = note || 'Rejected by admin';
+    purchase.processedBy = req.user.id;
+    purchase.processedAt = new Date();
+    await purchase.save();
+
+    res.json({ message: 'Token purchase request rejected.', purchase });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+};
+

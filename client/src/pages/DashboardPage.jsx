@@ -161,6 +161,14 @@ function DashboardPage() {
   const [chatInputs, setChatInputs] = useState({});
   const [updatingBookingId, setUpdatingBookingId] = useState(null);
   const [enablingInstructor, setEnablingInstructor] = useState(false);
+  const [manualPurchases, setManualPurchases] = useState([]);
+  const [isLoadingManualPurchases, setIsLoadingManualPurchases] = useState(false);
+  const [selectedTopupPackage, setSelectedTopupPackage] = useState(null);
+  const [bkashNumberInput, setBkashNumberInput] = useState("");
+  const [trxIdInput, setTrxIdInput] = useState("");
+  const [isSubmittingPurchase, setIsSubmittingPurchase] = useState(false);
+  const [adminTokenPurchases, setAdminTokenPurchases] = useState([]);
+  const [isLoadingAdminTokenPurchases, setIsLoadingAdminTokenPurchases] = useState(false);
   const socketRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -253,6 +261,30 @@ function DashboardPage() {
       setTransactions([]);
     } finally {
       setIsLoadingTx(false);
+    }
+  }, []);
+
+  const loadManualPurchases = useCallback(async () => {
+    setIsLoadingManualPurchases(true);
+    try {
+      const { data } = await api.get("/wallet/manual-purchases");
+      setManualPurchases(Array.isArray(data.purchases) ? data.purchases : []);
+    } catch (requestError) {
+      setManualPurchases([]);
+    } finally {
+      setIsLoadingManualPurchases(false);
+    }
+  }, []);
+
+  const loadAdminTokenPurchases = useCallback(async () => {
+    setIsLoadingAdminTokenPurchases(true);
+    try {
+      const { data } = await api.get("/admin/token-purchases");
+      setAdminTokenPurchases(Array.isArray(data.purchases) ? data.purchases : []);
+    } catch (requestError) {
+      setAdminTokenPurchases([]);
+    } finally {
+      setIsLoadingAdminTokenPurchases(false);
     }
   }, []);
 
@@ -578,6 +610,19 @@ function DashboardPage() {
   }, [adminSubTab, isAdmin, loadAllReviews]);
 
   useEffect(() => {
+    if (activeTab === "wallet" && user) {
+      loadManualPurchases();
+    }
+  }, [activeTab, user, loadManualPurchases]);
+
+  useEffect(() => {
+    if (isAdmin && adminSubTab === "token-purchases") {
+      loadAdminTokenPurchases();
+    }
+  }, [adminSubTab, isAdmin, loadAdminTokenPurchases]);
+
+
+  useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) return undefined;
 
@@ -673,6 +718,63 @@ function DashboardPage() {
       setIsAddingTokens(false);
     }
   };
+
+  const submitManualPurchase = async (e) => {
+    e.preventDefault();
+    if (!selectedTopupPackage) return;
+    if (!bkashNumberInput.trim() || !trxIdInput.trim()) {
+      setError("Please fill in both your bKash number and transaction ID.");
+      return;
+    }
+    setIsSubmittingPurchase(true);
+    setError("");
+    setFeedback("");
+    try {
+      await api.post("/wallet/manual-purchase", {
+        bkashNumber: bkashNumberInput,
+        amountPaid: selectedTopupPackage.tk,
+        trxId: trxIdInput
+      });
+      setFeedback("bKash payment verification request submitted successfully. Waiting for admin approval.");
+      setBkashNumberInput("");
+      setTrxIdInput("");
+      setSelectedTopupPackage(null);
+      await loadManualPurchases();
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to submit request.");
+    } finally {
+      setIsSubmittingPurchase(false);
+    }
+  };
+
+  const approveAdminTokenPurchase = async (id) => {
+    if (!window.confirm("Are you sure you want to approve this token purchase? The user will instantly receive their tokens.")) return;
+    setError("");
+    setFeedback("");
+    try {
+      await api.post(`/admin/token-purchases/${id}/approve`);
+      setFeedback("Token purchase request approved. Tokens have been transferred.");
+      await loadAdminTokenPurchases();
+      await syncMe();
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to approve request.");
+    }
+  };
+
+  const rejectAdminTokenPurchase = async (id) => {
+    const reason = window.prompt("Enter rejection reason (optional):");
+    if (reason === null) return;
+    setError("");
+    setFeedback("");
+    try {
+      await api.post(`/admin/token-purchases/${id}/reject`, { note: reason });
+      setFeedback("Token purchase request rejected.");
+      await loadAdminTokenPurchases();
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to reject request.");
+    }
+  };
+
 
   const saveProfile = async (e) => {
     e.preventDefault();
@@ -1306,20 +1408,199 @@ function DashboardPage() {
                 <div className="lms-card p-10 flex flex-col justify-between">
                   <div className="space-y-6">
                     <h3 className="text-xl font-bold text-white font-outfit">Top-Up Wallet</h3>
+                    <p className="text-xs text-slate-400">Select a token package and pay manually via bKash to buy tokens.</p>
                     <div className="grid grid-cols-2 gap-4">
-                      <button onClick={() => addTokens(100)} className="bg-white/5 hover:bg-white/10 border border-white/10 text-white p-5 rounded-2xl transition-all group">
-                        <p className="text-xs font-bold text-slate-500 group-hover:text-white transition-colors mb-1">Starter Pack</p>
-                        <p className="text-xl font-bold">100 <span className="text-[10px] opacity-50 uppercase">TKN</span></p>
-                      </button>
-                      <button onClick={() => addTokens(500)} className="bg-brand/10 hover:bg-brand/20 border border-brand/20 text-white p-5 rounded-2xl transition-all group shadow-lg shadow-brand/5">
-                        <p className="text-xs font-bold text-brand-light mb-1">Expert Bundle</p>
-                        <p className="text-xl font-bold">500 <span className="text-[10px] opacity-50 uppercase">TKN</span></p>
-                      </button>
+                      {[
+                        { tk: 50, tokens: 10, label: "Starter Pack" },
+                        { tk: 100, tokens: 20, label: "Standard Pack" },
+                        { tk: 200, tokens: 50, label: "Value Pack" },
+                        { tk: 500, tokens: 150, label: "Premium Pack" }
+                      ].map((pkg) => (
+                        <button
+                          key={pkg.tk}
+                          onClick={() => {
+                            setSelectedTopupPackage(pkg);
+                            setError("");
+                            setFeedback("");
+                          }}
+                          className={`hover:bg-white/10 border p-5 rounded-2xl transition-all group text-left ${
+                            selectedTopupPackage?.tk === pkg.tk
+                              ? "bg-brand/20 border-brand text-white shadow-lg shadow-brand/10"
+                              : "bg-white/5 border-white/10 text-white"
+                          }`}
+                        >
+                          <p className={`text-xs font-bold mb-1 transition-colors ${
+                            selectedTopupPackage?.tk === pkg.tk ? "text-brand-light" : "text-slate-500 group-hover:text-white"
+                          }`}>{pkg.label}</p>
+                          <p className="text-xl font-bold">{pkg.tokens} <span className="text-[10px] opacity-50 uppercase">TKN</span></p>
+                          <p className="text-xs text-slate-400 mt-1 font-semibold">{pkg.tk} TK</p>
+                        </button>
+                      ))}
                     </div>
                   </div>
-                  <button onClick={() => addTokens(1000)} className="w-full btn btn-secondary h-14 mt-6 border-dashed hover:border-brand transition-all">Custom Amount (Contact Sales)</button>
                 </div>
               </div>
+
+              {/* bKash Payment Form */}
+              {selectedTopupPackage && (
+                <motion.div
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-8 border border-[#E2136E]/30 bg-gradient-to-br from-[#E2136E]/10 to-black/40 rounded-3xl space-y-6 animate-pulse-subtle"
+                >
+                  <div className="flex items-center justify-between border-b border-white/5 pb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="px-3 py-1.5 bg-[#E2136E] text-white text-xs font-extrabold rounded-lg tracking-wider uppercase shrink-0">
+                        bKash Manual Payment
+                      </div>
+                      <h4 className="text-white font-bold text-lg font-outfit">Complete Your Token Purchase</h4>
+                    </div>
+                    <button
+                      onClick={() => setSelectedTopupPackage(null)}
+                      className="text-slate-500 hover:text-white transition-colors"
+                    >
+                      <XCircle className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div className="grid md:grid-cols-2 gap-8">
+                    {/* Instructions */}
+                    <div className="space-y-4 text-sm text-slate-300 leading-relaxed">
+                      <h5 className="font-bold text-white uppercase text-xs tracking-wider text-brand-light">Instructions</h5>
+                      <ol className="list-decimal list-inside space-y-2.5">
+                        <li>Open the <span className="font-bold text-white">bKash App</span> on your mobile phone.</li>
+                        <li>Go to <span className="font-bold text-white">Send Money</span>.</li>
+                        <li>Enter our official Learnova bKash Wallet Number: <span className="font-mono bg-white/10 px-2 py-1 rounded text-white font-bold select-all">+880 1789-012345</span></li>
+                        <li>Enter the exact amount: <span className="font-bold text-white">{selectedTopupPackage.tk} TK</span></li>
+                        <li>Enter your PIN and complete the transaction.</li>
+                        <li>Copy the <span className="font-bold text-white">Transaction ID (TrxID)</span> from your transaction confirmation screen or SMS and fill the form.</li>
+                      </ol>
+                      <div className="p-4 bg-white/5 rounded-2xl border border-white/10 flex items-start gap-3">
+                        <Info className="w-4 h-4 text-brand-light shrink-0 mt-0.5" />
+                        <p className="text-xs text-slate-400">Your manual payment request will be verified by an admin within 24 hours. The equivalent <span className="text-brand-light font-bold">{selectedTopupPackage.tokens} tokens</span> will be added to your account upon approval.</p>
+                      </div>
+                    </div>
+
+                    {/* Verification Form */}
+                    <form onSubmit={submitManualPurchase} className="space-y-4 bg-black/20 p-6 rounded-2xl border border-white/5">
+                      <h5 className="font-bold text-white uppercase text-xs tracking-wider text-[#E2136E]">Submit Payment Details</h5>
+                      
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">Package Selected</label>
+                        <input
+                          type="text"
+                          readOnly
+                          value={`${selectedTopupPackage.tokens} Tokens for ${selectedTopupPackage.tk} TK`}
+                          className="input-field bg-white/5 border-white/10 text-slate-400 h-11 text-xs"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">Your bKash Number (from which payment was done)</label>
+                        <input
+                          type="text"
+                          required
+                          value={bkashNumberInput}
+                          onChange={(e) => setBkashNumberInput(e.target.value)}
+                          placeholder="e.g. 017XXXXXXXX"
+                          className="input-field h-11 text-xs"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">Amount Paid (TK)</label>
+                        <input
+                          type="number"
+                          readOnly
+                          value={selectedTopupPackage.tk}
+                          className="input-field bg-white/5 border-white/10 text-slate-400 h-11 text-xs"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">Transaction ID (TrxID)</label>
+                        <input
+                          type="text"
+                          required
+                          value={trxIdInput}
+                          onChange={(e) => setTrxIdInput(e.target.value)}
+                          placeholder="e.g. 8K32J9X7Z"
+                          className="input-field h-11 text-xs font-mono uppercase"
+                        />
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={isSubmittingPurchase}
+                        className="w-full btn h-12 text-xs font-bold text-white bg-[#E2136E] border-[#E2136E] hover:bg-[#c90f5f] transition-all flex items-center justify-center gap-2"
+                      >
+                        {isSubmittingPurchase ? "Verifying Details..." : "Submit Transaction Verification"}
+                      </button>
+                    </form>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* bKash Purchase Requests History */}
+              {manualPurchases.length > 0 && (
+                <div className="lms-card overflow-hidden">
+                  <div className="p-8 border-b border-white/5 bg-white/[0.01] flex justify-between items-center">
+                    <h3 className="text-xl font-bold text-white font-outfit">bKash Top-Up Requests</h3>
+                    <span className="text-[10px] font-bold text-slate-500 bg-white/5 px-2.5 py-1 rounded-lg uppercase tracking-wider">
+                      {manualPurchases.filter(p => p.status === 'pending').length} Pending
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-white/5">
+                          <th className="px-8 py-5">Date</th>
+                          <th className="px-8 py-5">Sender Number</th>
+                          <th className="px-8 py-5">Amount Paid</th>
+                          <th className="px-8 py-5">Tokens</th>
+                          <th className="px-8 py-5">Transaction ID</th>
+                          <th className="px-8 py-5">Status</th>
+                          <th className="px-8 py-5">Note</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {manualPurchases.map((purchase) => (
+                          <tr key={purchase._id} className="text-sm hover:bg-white/[0.02] transition-colors group">
+                            <td className="px-8 py-6 text-slate-400 font-medium">
+                              {new Date(purchase.createdAt).toLocaleString()}
+                            </td>
+                            <td className="px-8 py-6 text-white font-semibold">
+                              {purchase.bkashNumber}
+                            </td>
+                            <td className="px-8 py-6 text-slate-300 font-bold">
+                              {purchase.amountPaid} BDT
+                            </td>
+                            <td className="px-8 py-6 text-brand-light font-extrabold">
+                              {purchase.tokens} TKN
+                            </td>
+                            <td className="px-8 py-6 font-mono text-xs text-white">
+                              {purchase.trxId}
+                            </td>
+                            <td className="px-8 py-6">
+                              <span className={`badge text-[9px] uppercase font-extrabold ${
+                                purchase.status === 'approved' ? 'badge-success' :
+                                purchase.status === 'rejected' ? 'badge-danger' :
+                                'badge-warning'
+                              }`}>
+                                {purchase.status}
+                              </span>
+                            </td>
+                            <td className="px-8 py-6 text-slate-400 text-xs italic max-w-xs truncate">
+                              {purchase.note || "-"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
 
               {/* Professional Transaction Table */}
               <div className="lms-card overflow-hidden">
@@ -1543,13 +1824,13 @@ function DashboardPage() {
           {activeTab === "admin" && isAdmin && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
               <div className="flex items-center gap-1 p-1 bg-white/5 rounded-2xl border border-white/5 w-fit">
-                {["accounts", "users", "payouts", "withdrawals", "reviews"].map(tab => (
+                {["accounts", "users", "payouts", "withdrawals", "token-purchases", "reviews"].map(tab => (
                   <button
                     key={tab}
                     onClick={() => setAdminSubTab(tab)}
                     className={`px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${adminSubTab === tab ? 'bg-brand/10 text-brand-light border border-brand/20 shadow-lg shadow-brand/10' : 'text-slate-500 hover:text-slate-300'}`}
                   >
-                    {tab}
+                    {tab === "token-purchases" ? "bKash Topups" : tab}
                   </button>
                 ))}
               </div>
@@ -1697,6 +1978,99 @@ function DashboardPage() {
                           </div>
                         </div>
                       ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {adminSubTab === "token-purchases" && (
+                <div className="lms-card p-8 space-y-6">
+                  <div className="flex justify-between items-center border-b border-white/5 pb-4">
+                    <div>
+                      <h4 className="text-xl font-bold text-white font-outfit">bKash Token Purchases</h4>
+                      <p className="text-xs text-slate-500 mt-1">Review and approve manual bKash payment submissions from students.</p>
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-500 bg-white/5 px-2.5 py-1 rounded-lg uppercase tracking-wider">
+                      {adminTokenPurchases.filter(p => p.status === 'pending').length} Pending Requests
+                    </span>
+                  </div>
+
+                  {isLoadingAdminTokenPurchases ? (
+                    <div className="p-24 text-center">
+                      <div className="w-8 h-8 border-2 border-white/10 border-t-brand rounded-full animate-spin mx-auto mb-4" />
+                      <p className="text-slate-600 text-xs font-bold uppercase tracking-widest">Loading Purchases...</p>
+                    </div>
+                  ) : adminTokenPurchases.length === 0 ? (
+                    <div className="py-20 text-center opacity-20 italic">No bKash token purchase submissions found.</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-white/5">
+                            <th className="px-4 py-3">Student</th>
+                            <th className="px-4 py-3">bKash Phone</th>
+                            <th className="px-4 py-3">Amount (BDT)</th>
+                            <th className="px-4 py-3">Tokens Requested</th>
+                            <th className="px-4 py-3">Transaction ID (TrxID)</th>
+                            <th className="px-4 py-3">Status</th>
+                            <th className="px-4 py-3">Date</th>
+                            <th className="px-4 py-3 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {adminTokenPurchases.map((purchase) => (
+                            <tr key={purchase._id} className="text-xs hover:bg-white/[0.02] transition-colors">
+                              <td className="px-4 py-4">
+                                <div>
+                                  <p className="text-white font-bold">{purchase.user_id?.name || "Unknown User"}</p>
+                                  <p className="text-slate-500 text-[10px]">{purchase.user_id?.email || "-"}</p>
+                                  <p className="text-[10px] text-brand-light">Bal: {purchase.user_id?.walletBalance ?? 0} TKN</p>
+                                </div>
+                              </td>
+                              <td className="px-4 py-4 text-white font-semibold">{purchase.bkashNumber}</td>
+                              <td className="px-4 py-4 text-slate-300 font-bold">{purchase.amountPaid} BDT</td>
+                              <td className="px-4 py-4 text-success font-extrabold">{purchase.tokens} TKN</td>
+                              <td className="px-4 py-4 font-mono text-white text-[11px] select-all">{purchase.trxId}</td>
+                              <td className="px-4 py-4">
+                                <span className={`px-2.5 py-0.5 rounded text-[8px] font-bold uppercase ${
+                                  purchase.status === 'approved' ? 'bg-success/10 text-success' :
+                                  purchase.status === 'rejected' ? 'bg-red-500/10 text-red-400' :
+                                  'bg-warning/10 text-warning'
+                                }`}>
+                                  {purchase.status}
+                                </span>
+                              </td>
+                              <td className="px-4 py-4 text-slate-500 text-[10px]">
+                                {new Date(purchase.createdAt).toLocaleString()}
+                              </td>
+                              <td className="px-4 py-4 text-right">
+                                {purchase.status === 'pending' ? (
+                                  <div className="flex justify-end gap-2">
+                                    <button
+                                      onClick={() => approveAdminTokenPurchase(purchase._id)}
+                                      className="px-3 py-1 bg-success hover:bg-success-dark text-white rounded text-[10px] font-bold transition-all shadow shadow-success/15 flex items-center gap-1"
+                                    >
+                                      <CheckCircle2 className="w-3 h-3" /> Approve
+                                    </button>
+                                    <button
+                                      onClick={() => rejectAdminTokenPurchase(purchase._id)}
+                                      className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-bold transition-all shadow shadow-red-500/15 flex items-center gap-1"
+                                    >
+                                      <XCircle className="w-3 h-3" /> Reject
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="text-[10px] text-slate-500">
+                                    <p>Processed by:</p>
+                                    <p className="text-white font-medium">{purchase.processedBy?.name || "Admin"}</p>
+                                    {purchase.note && <p className="italic text-slate-400">"{purchase.note}"</p>}
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   )}
                 </div>

@@ -9,7 +9,10 @@ const {
   updateUserStatus,
   listCompletedBookings,
   approvePayout,
-  listAllReviews
+  listAllReviews,
+  listTokenPurchases,
+  approveTokenPurchase,
+  rejectTokenPurchase
 } = require('../controllers/admin.controller');
 
 router.use(verifyToken, adminMiddleware.requireAdmin);
@@ -24,7 +27,13 @@ router.patch('/users/:id/status', updateUserStatus);
 router.get('/bookings/completed', listCompletedBookings);
 router.post('/bookings/:id/payout', approvePayout);
 
+// Token Purchases (manual bkash)
+router.get('/token-purchases', listTokenPurchases);
+router.post('/token-purchases/:id/approve', approveTokenPurchase);
+router.post('/token-purchases/:id/reject', rejectTokenPurchase);
+
 // Reviews & Ratings
 router.get('/reviews', listAllReviews);
 
 module.exports = router;
+
