@@ -27,7 +27,8 @@ import {
   MoreVertical,
   ExternalLink,
   Search,
-  Sparkles
+  Sparkles,
+  Star
 } from "lucide-react";
 import api from "../api/axios";
 import { createSocketClient } from "../realtime/socket";
@@ -128,6 +129,8 @@ function DashboardPage() {
   const [allUsers, setAllUsers] = useState([]);
   const [pendingBookings, setPendingBookings] = useState([]);
   const [completedBookings, setCompletedBookings] = useState([]);
+  const [allReviews, setAllReviews] = useState([]);
+  const [isLoadingReviews, setIsLoadingReviews] = useState(false);
   // Admin overview metrics
   const [adminWeekBookings, setAdminWeekBookings] = useState(0);
   const [adminEscrowTokens, setAdminEscrowTokens] = useState(0);
@@ -306,6 +309,19 @@ function DashboardPage() {
       const { data } = await api.get("/admin/bookings/completed");
       setCompletedBookings(Array.isArray(data.bookings) ? data.bookings : []);
     } catch (e) {}
+  }, [isAdmin]);
+
+  const loadAllReviews = useCallback(async () => {
+    if (!isAdmin) return;
+    setIsLoadingReviews(true);
+    try {
+      const { data } = await api.get("/admin/reviews");
+      setAllReviews(Array.isArray(data.reviews) ? data.reviews : []);
+    } catch (e) {
+      setAllReviews([]);
+    } finally {
+      setIsLoadingReviews(false);
+    }
   }, [isAdmin]);
 
   const updateAccountStatus = async (id, status) => {
@@ -513,6 +529,7 @@ function DashboardPage() {
           loadAllUsers();
           loadCompletedBookings();
           loadAdminOverview();
+          loadAllReviews();
         }
       } catch (requestError) {
         setError(requestError.response?.data?.message || "Failed to load profile.");
@@ -529,6 +546,12 @@ function DashboardPage() {
     loadPendingWithdrawals();
     loadNotifications();
   }, [user, loadBookings, loadTransactions, loadMyWithdrawals, loadPendingWithdrawals, loadNotifications]);
+
+  useEffect(() => {
+    if (isAdmin && adminSubTab === "reviews") {
+      loadAllReviews();
+    }
+  }, [adminSubTab, isAdmin, loadAllReviews]);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -1473,7 +1496,7 @@ function DashboardPage() {
           {activeTab === "admin" && isAdmin && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
               <div className="flex items-center gap-1 p-1 bg-white/5 rounded-2xl border border-white/5 w-fit">
-                {["accounts", "users", "payouts", "withdrawals"].map(tab => (
+                {["accounts", "users", "payouts", "withdrawals", "reviews"].map(tab => (
                   <button
                     key={tab}
                     onClick={() => setAdminSubTab(tab)}
@@ -1607,6 +1630,71 @@ function DashboardPage() {
                           </div>
                         </div>
                       ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {adminSubTab === "reviews" && (
+                <div className="lms-card p-8 space-y-6">
+                  <div className="flex justify-between items-center border-b border-white/5 pb-4">
+                    <div>
+                      <h4 className="text-xl font-bold text-white font-outfit">All Ratings & Reviews</h4>
+                      <p className="text-xs text-slate-500 mt-1">Monitor all student ratings and feedback given to tutors on the platform.</p>
+                    </div>
+                  </div>
+                  
+                  {isLoadingReviews ? (
+                    <div className="p-24 text-center">
+                      <div className="w-8 h-8 border-2 border-white/10 border-t-brand rounded-full animate-spin mx-auto mb-4" />
+                      <p className="text-slate-600 text-xs font-bold uppercase tracking-widest">Loading Reviews...</p>
+                    </div>
+                  ) : allReviews.length === 0 ? (
+                    <div className="py-20 text-center opacity-20 italic">No ratings or reviews submitted yet.</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-white/5">
+                            <th className="px-4 py-3">Student</th>
+                            <th className="px-4 py-3">Tutor</th>
+                            <th className="px-4 py-3">Session (Gig)</th>
+                            <th className="px-4 py-3">Rating</th>
+                            <th className="px-4 py-3">Feedback</th>
+                            <th className="px-4 py-3 text-right">Submitted</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {allReviews.map(r => (
+                            <tr key={r._id} className="text-xs hover:bg-white/[0.02]">
+                              <td className="px-4 py-4">
+                                <p className="text-white font-bold">{r.student_id?.name || "Anonymous"}</p>
+                                <p className="text-slate-500">{r.student_id?.email || ""}</p>
+                              </td>
+                              <td className="px-4 py-4">
+                                <p className="text-white font-bold">{r.teacher_id?.name || "Verified Tutor"}</p>
+                                <p className="text-slate-500">{r.teacher_id?.email || ""}</p>
+                              </td>
+                              <td className="px-4 py-4">
+                                <p className="text-white font-semibold">{r.gig_id?.title || "Specialized Session"}</p>
+                                <p className="text-brand-light">{r.gig_id?.price ? `${r.gig_id.price} TKN` : ""}</p>
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="flex items-center gap-1 text-yellow-500 font-bold">
+                                  <Star className="w-3.5 h-3.5 fill-yellow-500" />
+                                  <span>{r.rating?.toFixed(1)}</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-4 max-w-xs">
+                                <p className="text-slate-300 italic whitespace-normal leading-relaxed">"{r.reviewText || "No comment provided."}"</p>
+                              </td>
+                              <td className="px-4 py-4 text-right text-slate-500">
+                                {new Date(r.createdAt).toLocaleDateString()}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   )}
                 </div>

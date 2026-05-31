@@ -1,6 +1,7 @@
 const User = require('../models/user.model');
 const Booking = require('../models/booking.model');
 const Transaction = require('../models/transaction.model');
+const Review = require('../models/review.model');
 const { getIO } = require('../utils/socket');
 const mongoose = require('mongoose');
 
@@ -123,5 +124,19 @@ exports.approvePayout = async (req, res) => {
     res.status(400).json({ message: error.message });
   } finally {
     await session.endSession();
+  }
+};
+
+/** List all reviews and ratings */
+exports.listAllReviews = async (req, res) => {
+  try {
+    const reviews = await Review.find()
+      .populate('student_id', 'name email')
+      .populate('teacher_id', 'name email')
+      .populate('gig_id', 'title price')
+      .sort({ createdAt: -1 });
+    res.json({ reviews });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
   }
 };

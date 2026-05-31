@@ -8,7 +8,8 @@ const {
   listAllUsers,
   updateUserStatus,
   listCompletedBookings,
-  approvePayout
+  approvePayout,
+  listAllReviews
 } = require('../controllers/admin.controller');
 
 router.use(verifyToken, adminMiddleware.requireAdmin);
@@ -22,5 +23,8 @@ router.patch('/users/:id/status', updateUserStatus);
 // Bookings
 router.get('/bookings/completed', listCompletedBookings);
 router.post('/bookings/:id/payout', approvePayout);
+
+// Reviews & Ratings
+router.get('/reviews', listAllReviews);
 
 module.exports = router;
