@@ -82,7 +82,7 @@ const createManualPurchase = async (req, res) => {
     const tokens = PACKAGES[parsedAmount];
 
     // Check if trxId already exists
-    const existing = await TokenPurchase.findOne({ trxId: trxId.trim() });
+    const existing = await TokenPurchase.findOne({ trxId: trxId.trim().toUpperCase() });
     if (existing) {
       return res.status(400).json({ message: 'This transaction ID (trxId) has already been submitted.' });
     }
@@ -92,7 +92,7 @@ const createManualPurchase = async (req, res) => {
       bkashNumber: bkashNumber.trim(),
       amountPaid: parsedAmount,
       tokens: tokens,
-      trxId: trxId.trim(),
+      trxId: trxId.trim().toUpperCase(),
       status: 'pending',
     });
 

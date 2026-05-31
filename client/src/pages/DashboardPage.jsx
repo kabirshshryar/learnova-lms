@@ -731,9 +731,9 @@ function DashboardPage() {
     setFeedback("");
     try {
       await api.post("/wallet/manual-purchase", {
-        bkashNumber: bkashNumberInput,
+        bkashNumber: bkashNumberInput.trim(),
         amountPaid: selectedTopupPackage.tk,
-        trxId: trxIdInput
+        trxId: trxIdInput.trim().toUpperCase()
       });
       setFeedback("bKash payment verification request submitted successfully. Waiting for admin approval.");
       setBkashNumberInput("");
@@ -1523,7 +1523,7 @@ function DashboardPage() {
                           type="text"
                           required
                           value={trxIdInput}
-                          onChange={(e) => setTrxIdInput(e.target.value)}
+                          onChange={(e) => setTrxIdInput(e.target.value.toUpperCase())}
                           placeholder="e.g. 8K32J9X7Z"
                           className="input-field h-11 text-xs font-mono uppercase"
                         />
@@ -1631,8 +1631,8 @@ function DashboardPage() {
                         {transactions.map((tx) => (
                           <tr key={tx._id} className="text-sm hover:bg-white/[0.02] transition-colors group">
                             <td className="px-8 py-6">
-                              <div className={`badge ${tx.operation === 'DEBIT' ? 'badge-danger' : 'badge-success'} text-[9px]`}>
-                                {tx.operation}
+                              <div className={`badge ${tx.operation?.toLowerCase() === 'debit' ? 'badge-danger' : 'badge-success'} text-[9px]`}>
+                                {tx.operation?.toUpperCase()}
                               </div>
                             </td>
                             <td className="px-8 py-6">
@@ -1642,8 +1642,8 @@ function DashboardPage() {
                             <td className="px-8 py-6">
                               <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest bg-white/5 px-2 py-1 rounded">{tx.referenceType}</span>
                             </td>
-                            <td className={`px-8 py-6 text-right font-extrabold ${tx.operation === 'DEBIT' ? 'text-slate-400' : 'text-success'}`}>
-                              {tx.operation === 'DEBIT' ? '-' : '+'}{Math.abs(tx.amount)}
+                            <td className={`px-8 py-6 text-right font-extrabold ${tx.operation?.toLowerCase() === 'debit' ? 'text-slate-400' : 'text-success'}`}>
+                              {tx.operation?.toLowerCase() === 'debit' ? '-' : '+'}{Math.abs(tx.amount)}
                             </td>
                           </tr>
                         ))}
