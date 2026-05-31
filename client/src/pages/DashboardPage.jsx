@@ -648,6 +648,21 @@ function DashboardPage() {
     }
   };
 
+  const handleUpgrade = async () => {
+    setEnablingInstructor(true);
+    setError("");
+    setFeedback("");
+    try {
+      const { data } = await api.patch("/auth/me/become-instructor");
+      await syncMe();
+      setFeedback(data.message || "Account upgraded to student and instructor successfully.");
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to upgrade account.");
+    } finally {
+      setEnablingInstructor(false);
+    }
+  };
+
   const updateBookingStatus = async (bookingId, status) => {
     let meetingLink = "";
     if (status === 'confirmed') {
@@ -1321,9 +1336,21 @@ function DashboardPage() {
                       {roles.map(role => (
                         <span key={role} className="px-3 py-1 bg-white/5 border border-white/10 text-slate-400 text-[10px] font-bold uppercase tracking-widest rounded-lg">{role}</span>
                       ))}
-                      <button className="px-3 py-1 bg-brand/10 border border-brand/20 text-brand-light text-[10px] font-bold uppercase tracking-widest rounded-lg flex items-center gap-1.5 hover:bg-brand/20 transition-all">
-                        <Plus className="w-3 h-3" /> Upgrade
-                      </button>
+                      {!roles.includes("instructor") && (
+                        <button
+                          onClick={handleUpgrade}
+                          disabled={enablingInstructor}
+                          className="px-3 py-1 bg-brand/10 border border-brand/20 text-brand-light text-[10px] font-bold uppercase tracking-widest rounded-lg flex items-center gap-1.5 hover:bg-brand/20 transition-all disabled:opacity-50"
+                        >
+                          {enablingInstructor ? (
+                            "Upgrading..."
+                          ) : (
+                            <>
+                              <Plus className="w-3 h-3" /> Upgrade
+                            </>
+                          )}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
