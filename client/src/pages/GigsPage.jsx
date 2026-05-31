@@ -16,7 +16,8 @@ import {
   Filter,
   User,
   ExternalLink,
-  ArrowRight
+  ArrowRight,
+  Star
 } from "lucide-react";
 import api from "../api/axios";
 import { getUserId } from "../utils/user";
@@ -41,7 +42,7 @@ const GigCard = ({ gig, variant, token, isStudent, isTeacher, myId, onBook, onDe
         <div className="flex justify-between items-start gap-4">
           <div className="space-y-1">
             <h3 className="text-lg font-bold text-white group-hover:text-brand-light transition-colors leading-tight">{gig.title}</h3>
-            <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+            <div className="flex items-center gap-2.5 text-xs text-slate-500 font-medium">
               <div className="relative flex items-center">
                 <User className="w-3.5 h-3.5" />
                 {gig.teacher_id?.isOnline && (
@@ -49,6 +50,11 @@ const GigCard = ({ gig, variant, token, isStudent, isTeacher, myId, onBook, onDe
                 )}
               </div>
               <span>{gig.teacher_id?.name || "Verified Tutor"}</span>
+              <span className="opacity-40">·</span>
+              <div className="flex items-center gap-1 text-yellow-500 font-semibold" title="Session average rating">
+                <Star className="w-3.5 h-3.5 fill-yellow-500 text-yellow-500" />
+                <span>{gig.rating > 0 ? gig.rating.toFixed(1) : "New"}</span>
+              </div>
               {gig.teacher_id?.isOnline && (
                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-green-500/10 text-green-400 border border-green-500/20 uppercase tracking-wider animate-pulse ml-1">
                   Available Now

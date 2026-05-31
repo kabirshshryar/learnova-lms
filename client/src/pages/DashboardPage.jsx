@@ -9,7 +9,8 @@ import {
   MessageCircle, 
   Video, 
   User as UserIcon, 
-  Settings, 
+  Settings,
+  User,
   ChevronRight, 
   ArrowUpRight, 
   Plus, 
@@ -727,7 +728,7 @@ function DashboardPage() {
             {/* hide "My Sessions" for admin users */}
             {!isAdmin && <NavItem active={activeTab === "bookings"} onClick={() => setActiveTab("bookings")} icon={BookOpen}>My Sessions</NavItem>}
             <NavItem active={activeTab === "wallet"} onClick={() => setActiveTab("wallet")} icon={Wallet}>Wallet & Tx</NavItem>
-            <NavItem active={activeTab === "profile"} onClick={() => setActiveTab("profile")} icon={Settings}>Settings</NavItem>
+            <NavItem active={activeTab === "profile"} onClick={() => setActiveTab("profile")} icon={User}>Profile</NavItem>
             {isAdmin && <NavItem active={activeTab === "admin"} onClick={() => setActiveTab("admin")} icon={ShieldAlert}>Admin Panel</NavItem>}
           </nav>
 
