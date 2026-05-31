@@ -130,8 +130,8 @@ const createBooking = async (req, res) => {
     });
 
     populatedBooking = await Booking.findById(createdBooking._id)
-      .populate('student_id', 'name email')
-      .populate('teacher_id', 'name email')
+      .populate('student_id', 'name email profilePicture')
+      .populate('teacher_id', 'name email profilePicture')
       .populate('gig_id', 'title description duration price');
 
     // Notify the teacher about the new booking
@@ -292,8 +292,8 @@ const updateBookingStatus = async (req, res) => {
     });
 
     const updatedBooking = await Booking.findById(id)
-      .populate('student_id', 'name email walletBalance')
-      .populate('teacher_id', 'name email')
+      .populate('student_id', 'name email walletBalance profilePicture')
+      .populate('teacher_id', 'name email profilePicture')
       .populate('gig_id', 'title price');
 
     // Trigger persistent notifications for status transitions
@@ -440,8 +440,8 @@ const getMyBookings = async (req, res) => {
 
     const bookings = await Booking.find({ $or: filters })
       .sort({ createdAt: -1 })
-      .populate('student_id', 'name email')
-      .populate('teacher_id', 'name email')
+      .populate('student_id', 'name email profilePicture')
+      .populate('teacher_id', 'name email profilePicture')
       .populate('gig_id', 'title price duration');
 
     return res.status(200).json({ bookings });

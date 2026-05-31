@@ -131,8 +131,8 @@ exports.approvePayout = async (req, res) => {
 exports.listAllReviews = async (req, res) => {
   try {
     const reviews = await Review.find()
-      .populate('student_id', 'name email')
-      .populate('teacher_id', 'name email')
+      .populate('student_id', 'name email profilePicture')
+      .populate('teacher_id', 'name email profilePicture')
       .populate('gig_id', 'title price')
       .sort({ createdAt: -1 });
     res.json({ reviews });

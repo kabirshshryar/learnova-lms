@@ -342,8 +342,12 @@ function App() {
                        "Learner"}
                     </p>
                   </div>
-                  <div className="w-7 h-7 rounded-full bg-brand/20 flex items-center justify-center border border-brand/30">
-                    <UserIcon className="w-3.5 h-3.5 text-brand-light" />
+                  <div className="w-7 h-7 rounded-full overflow-hidden bg-brand/20 flex items-center justify-center border border-brand/30">
+                    {user?.profilePicture ? (
+                      <img src={user.profilePicture} alt="Profile" className="w-full h-full object-cover" />
+                    ) : (
+                      <UserIcon className="w-3.5 h-3.5 text-brand-light" />
+                    )}
                   </div>
                 </Link>
               </div>

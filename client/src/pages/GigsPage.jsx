@@ -43,8 +43,14 @@ const GigCard = ({ gig, variant, token, isStudent, isTeacher, myId, onBook, onDe
           <div className="space-y-1">
             <h3 className="text-lg font-bold text-white group-hover:text-brand-light transition-colors leading-tight">{gig.title}</h3>
             <div className="flex items-center gap-2.5 text-xs text-slate-500 font-medium">
-              <div className="relative flex items-center">
-                <User className="w-3.5 h-3.5" />
+              <div className="relative flex items-center shrink-0">
+                {gig.teacher_id?.profilePicture ? (
+                  <div className="w-6 h-6 rounded-full overflow-hidden border border-white/10 shrink-0">
+                    <img src={gig.teacher_id.profilePicture} alt={gig.teacher_id.name} className="w-full h-full object-cover" />
+                  </div>
+                ) : (
+                  <User className="w-3.5 h-3.5" />
+                )}
                 {gig.teacher_id?.isOnline && (
                   <span className="absolute -top-1 -left-1 w-2.5 h-2.5 bg-green-500 rounded-full border border-dark-bg animate-pulse" title="Available now for consultation" />
                 )}

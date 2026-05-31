@@ -208,7 +208,7 @@ const updateMyInterests = async (req, res) => {
 
 const updateProfile = async (req, res) => {
   try {
-    const { name, description, education, certification, experience, interests } = req.body;
+    const { name, description, education, certification, experience, interests, profilePicture } = req.body;
 
     const user = await User.findById(req.user.id);
     if (!user) {
@@ -220,6 +220,7 @@ const updateProfile = async (req, res) => {
     if (education !== undefined) user.education = education.trim();
     if (certification !== undefined) user.certification = certification.trim();
     if (experience !== undefined) user.experience = experience.trim();
+    if (profilePicture !== undefined) user.profilePicture = profilePicture.trim();
 
     if (interests !== undefined && Array.isArray(interests)) {
       user.interests = [

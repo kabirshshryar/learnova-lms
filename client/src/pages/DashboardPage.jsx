@@ -162,6 +162,7 @@ function DashboardPage() {
   const [updatingBookingId, setUpdatingBookingId] = useState(null);
   const [enablingInstructor, setEnablingInstructor] = useState(false);
   const socketRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const roles = Array.isArray(user?.roles) ? user.roles : [];
   const isTeacher = roles.includes("instructor") || roles.includes("admin");
@@ -323,6 +324,29 @@ function DashboardPage() {
       setIsLoadingReviews(false);
     }
   }, [isAdmin]);
+
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    if (file.size > 4 * 1024 * 1024) {
+      setError("Image size must be less than 4MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64String = reader.result;
+      try {
+        await api.patch("/auth/me", { profilePicture: base64String });
+        await syncMe();
+        setFeedback("Profile picture updated successfully.");
+      } catch (err) {
+        setError("Failed to update profile picture.");
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   const updateAccountStatus = async (id, status) => {
     try {
@@ -1094,7 +1118,16 @@ function DashboardPage() {
                                   {new Date(booking.time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                 </span>
                               </span>
-                              <span className="flex items-center gap-2"><UserIcon className="w-3.5 h-3.5" /> {booking.teacher_id?.name || "Verified Tutor"}</span>
+                              <span className="flex items-center gap-2">
+                                {booking.teacher_id?.profilePicture ? (
+                                  <div className="w-5 h-5 rounded-full overflow-hidden border border-white/10 shrink-0">
+                                    <img src={booking.teacher_id.profilePicture} alt="Tutor" className="w-full h-full object-cover" />
+                                  </div>
+                                ) : (
+                                  <UserIcon className="w-3.5 h-3.5" />
+                                )}
+                                {booking.teacher_id?.name || "Verified Tutor"}
+                              </span>
                               <span className="flex items-center gap-2"><CreditCard className="w-3.5 h-3.5" /> {booking.gig_id?.price || 0} TKN</span>
                             </div>
                           </div>
@@ -1345,11 +1378,25 @@ function DashboardPage() {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-3xl mx-auto space-y-10 pb-20">
               <div className="lms-card p-10 space-y-10">
                 <div className="flex flex-col sm:flex-row items-center gap-8 pb-10 border-b border-white/5">
-                  <div className="w-28 h-28 rounded-3xl bg-brand/10 border-2 border-brand/40 flex items-center justify-center relative group shrink-0">
-                    <UserIcon className="w-12 h-12 text-brand-light" />
-                    <div className="absolute inset-0 bg-brand/40 opacity-0 group-hover:opacity-100 rounded-3xl flex items-center justify-center transition-all cursor-pointer backdrop-blur-sm">
+                  <div 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-28 h-28 rounded-3xl overflow-hidden bg-brand/10 border-2 border-brand/40 flex items-center justify-center relative group shrink-0 cursor-pointer"
+                  >
+                    {user?.profilePicture ? (
+                      <img src={user.profilePicture} alt="Profile" className="w-full h-full object-cover" />
+                    ) : (
+                      <UserIcon className="w-12 h-12 text-brand-light" />
+                    )}
+                    <div className="absolute inset-0 bg-brand/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all backdrop-blur-sm">
                       <Plus className="w-8 h-8 text-white" />
                     </div>
+                    <input 
+                      type="file" 
+                      ref={fileInputRef} 
+                      onChange={handleAvatarChange} 
+                      accept="image/*" 
+                      className="hidden" 
+                    />
                   </div>
                   <div className="text-center sm:text-left space-y-4">
                     <div>
@@ -1516,9 +1563,18 @@ function DashboardPage() {
                     <div className="space-y-4">
                       {pendingUsers.map(u => (
                         <div key={u._id} className="p-5 bg-white/5 border border-white/5 rounded-2xl flex justify-between items-center gap-6">
-                          <div>
-                            <p className="text-sm font-bold text-white">{u.name}</p>
-                            <p className="text-[10px] text-slate-500 uppercase tracking-wider">{u.email}</p>
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-xl overflow-hidden bg-brand/10 border border-brand/20 flex items-center justify-center shrink-0">
+                              {u.profilePicture ? (
+                                <img src={u.profilePicture} alt={u.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <UserIcon className="w-5 h-5 text-brand-light" />
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-white">{u.name}</p>
+                              <p className="text-[10px] text-slate-500 uppercase tracking-wider">{u.email}</p>
+                            </div>
                           </div>
                           <button onClick={() => approveUser(u._id)} className="btn btn-primary h-10 px-6 bg-success border-success text-[10px]">Approve Account</button>
                         </div>
@@ -1545,8 +1601,19 @@ function DashboardPage() {
                         {allUsers.map(u => (
                           <tr key={u._id} className="text-xs hover:bg-white/[0.02]">
                             <td className="px-4 py-4">
-                              <p className="text-white font-bold">{u.name}</p>
-                              <p className="text-slate-500">{u.email}</p>
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-lg overflow-hidden bg-brand/10 flex items-center justify-center border border-brand/20 shrink-0">
+                                  {u.profilePicture ? (
+                                    <img src={u.profilePicture} alt={u.name} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <UserIcon className="w-4 h-4 text-brand-light" />
+                                  )}
+                                </div>
+                                <div>
+                                  <p className="text-white font-bold">{u.name}</p>
+                                  <p className="text-slate-500">{u.email}</p>
+                                </div>
+                              </div>
                             </td>
                             <td className="px-4 py-4">
                               <div className="flex gap-1">
@@ -1668,12 +1735,34 @@ function DashboardPage() {
                           {allReviews.map(r => (
                             <tr key={r._id} className="text-xs hover:bg-white/[0.02]">
                               <td className="px-4 py-4">
-                                <p className="text-white font-bold">{r.student_id?.name || "Anonymous"}</p>
-                                <p className="text-slate-500">{r.student_id?.email || ""}</p>
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-full overflow-hidden bg-brand/10 border border-white/10 flex items-center justify-center shrink-0">
+                                    {r.student_id?.profilePicture ? (
+                                      <img src={r.student_id.profilePicture} alt={r.student_id.name} className="w-full h-full object-cover" />
+                                    ) : (
+                                      <UserIcon className="w-4 h-4 text-brand-light" />
+                                    )}
+                                  </div>
+                                  <div>
+                                    <p className="text-white font-bold">{r.student_id?.name || "Anonymous"}</p>
+                                    <p className="text-slate-500">{r.student_id?.email || ""}</p>
+                                  </div>
+                                </div>
                               </td>
                               <td className="px-4 py-4">
-                                <p className="text-white font-bold">{r.teacher_id?.name || "Verified Tutor"}</p>
-                                <p className="text-slate-500">{r.teacher_id?.email || ""}</p>
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-full overflow-hidden bg-brand/10 border border-white/10 flex items-center justify-center shrink-0">
+                                    {r.teacher_id?.profilePicture ? (
+                                      <img src={r.teacher_id.profilePicture} alt={r.teacher_id.name} className="w-full h-full object-cover" />
+                                    ) : (
+                                      <UserIcon className="w-4 h-4 text-brand-light" />
+                                    )}
+                                  </div>
+                                  <div>
+                                    <p className="text-white font-bold">{r.teacher_id?.name || "Verified Tutor"}</p>
+                                    <p className="text-slate-500">{r.teacher_id?.email || ""}</p>
+                                  </div>
+                                </div>
                               </td>
                               <td className="px-4 py-4">
                                 <p className="text-white font-semibold">{r.gig_id?.title || "Specialized Session"}</p>
